@@ -1,0 +1,69 @@
+# codex_monk — kubernetes cluster monitor
+#
+# Three sub-swarms:
+#   1. node       — DaemonSet shape. Per-node: kernel + cgroup_pods + disk_net
+#                   probes in one fabric. Three gates, one local audit sink,
+#                   one outbound gateway shipping alerts to the aggregator.
+#   2. cluster    — Deployment shape (one replica). k8s_api probe watching
+#                   apiserver/etcd/scheduler/nodes/events/deployments.
+#   3. aggregator — Deployment shape, same Pod as `cluster`. Pure SINK swarm:
+#                   receives type-700 alerts from every node + cluster gateway,
+#                   persists to graph/aggregator_alerts.jsonl.
+#
+# For local dev (single host, no real cluster) you can just `python boot.py
+# --config multiswarm.k8s.yaml` and watch the probes run against /proc and
+# (absent) /sys/fs/cgroup/kubepods.slice. The k8s_api probe will report
+# api.healthy=0 because no service-account creds — that's correct.
+
+multiswarm:
+  id: 7
+  name: "codex-k8s-monitor"
+
+security:
+  psk: "${VJR_PSK:dev_psk_change_me}"
+
+swarms:
+
+  # ──────────────────────────────────────────────────────────────────────
+  # NODE — runs per-node (DaemonSet in real deployment). Three probe agents
+  # gate on their own opcodes; all alert through the local gateway out to
+  # the aggregator.
+  - name: k8s_node
+    include: swarms/k8s_node.yaml
+    state_prefix: "swarm.k8s_node."
+    fabric_path: "/dev/shm/codex.k8s_node.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19201"
+      peers:
+        - { name: aggregator, addr: "127.0.0.1:19203" }
+      routes:
+        - { type: 700, peer: aggregator, agent: 1 }
+
+  # ──────────────────────────────────────────────────────────────────────
+  # CLUSTER — control-plane probe. One per cluster, not per node.
+  - name: k8s_cluster
+    include: swarms/k8s_cluster.yaml
+    state_prefix: "swarm.k8s_cluster."
+    fabric_path: "/dev/shm/codex.k8s_cluster.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19202"
+      peers:
+        - { name: aggregator, addr: "127.0.0.1:19203" }
+      routes:
+        - { type: 700, peer: aggregator, agent: 1 }
+
+  # ──────────────────────────────────────────────────────────────────────
+  # AGGREGATOR — pure sink. Receives from node + cluster gateways.
+  - name: k8s_aggregator
+    include: swarms/k8s_aggregator.yaml
+    state_prefix: "swarm.k8s_aggregator."
+    fabric_path: "/dev/shm/codex.k8s_aggregator.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19203"
+      peers:
+        - { name: k8s_node,    addr: "127.0.0.1:19201" }
+        - { name: k8s_cluster, addr: "127.0.0.1:19202" }
+      routes: []     # aggregator doesn't originate outbound traffic

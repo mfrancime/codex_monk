@@ -1,0 +1,47 @@
+# k8s_node sub-swarm — three probe agents running on the same node.
+#
+# Each agent runs its own probe and gates with its own genome. The genomes
+# are starter rules; tighten via the truth-corpus iteration once you have
+# enough scenarios that drive each probe's opcodes.
+#
+# Routing: all alerts go to narrator_id=9 (the local gateway), which
+# forwards to the aggregator swarm via VJR (see multiswarm.k8s.yaml routes).
+
+agents:
+
+  # Kernel sensor — same gate as the standalone monitor. Pages on PSI.
+  - type: declarative
+    id: 1
+    priority: 1
+    config:
+      probe: kernel
+      genome: "ψf‡5>→Ccψs‡10>~S0≡∧→Cnψs‡10>→Ww~S≡→Ia"
+      narrator_id: 9
+      calm_interval: 10
+      alert_interval: 1
+
+  # Per-pod cgroup sensor — pages when ANY pod is under memory pressure or
+  # when OOM kills are observed in the recent window.
+  - type: declarative
+    id: 2
+    priority: 1
+    config:
+      probe: cgroup_pods
+      # Πo > 0 → CRIT (OOM happened recently);
+      # Πs > 10 → WARN (some pod heavily stalled).
+      genome: "Πo0>→CcΠs‡10>→Ww"
+      narrator_id: 9
+      calm_interval: 10
+      alert_interval: 1
+
+  # Node disk + network sensor — pages on packet errors or disk saturation.
+  - type: declarative
+    id: 3
+    priority: 1
+    config:
+      probe: disk_net
+      # Νe > 0 → CRIT (any errors); Δu > 80 → WARN (high disk util).
+      genome: "Νe0>→CcΔu‡80>→Ww"
+      narrator_id: 9
+      calm_interval: 10
+      alert_interval: 1

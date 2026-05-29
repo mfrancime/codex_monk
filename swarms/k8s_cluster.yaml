@@ -1,0 +1,26 @@
+# k8s_cluster sub-swarm — single-replica control-plane watcher.
+#
+# Runs the k8s_api probe. In production this Pod has a service account
+# (the projected token at /var/run/secrets/...) so the probe authenticates
+# automatically. For local dev with no service account, the probe reports
+# k8s.api.healthy = 0 and the genome correctly emits CRITICAL GATE_DOWN.
+
+agents:
+
+  # K8s control-plane sensor.
+  - type: declarative
+    id: 1
+    priority: 1
+    config:
+      probe: k8s_api
+      # Rules in priority order:
+      #   Ka < 1   → CRIT GATE_DOWN  (apiserver unreachable)
+      #   Kx > 0   → CRIT CLUSTER_DEGRADED (any node NotReady)
+      #   Kd > 0   → WARN MEM_PSI_WARN (any deployment degraded — reused
+      #              code; could become a dedicated code later)
+      #   Ke > 5   → WARN MEM_PSI_WARN (warning-event spike)
+      genome: "Ka1<→CgKx0>→CdKd0>→WwKe5>→Ww"
+      narrator_id: 9
+      # k8s API is rate-sensitive — slow this down a lot vs node probes.
+      calm_interval: 30
+      alert_interval: 5

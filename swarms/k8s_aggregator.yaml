@@ -1,0 +1,21 @@
+# k8s_aggregator sub-swarm — central audit + cluster-correlation sink.
+#
+# Receives type-700 alerts from every node sub-swarm and from the cluster
+# sub-swarm via VJR. Persists everything to graph/aggregator_alerts.jsonl
+# so the operator has one timeline across the cluster.
+#
+# A second agent (id=2) could later run a correlation genome over
+# fabric state written by the gateway to do "3 nodes pressured AND
+# apiserver healthy → CLUSTER_DEGRADED" — that's Phase B+ work and would
+# require a probe that introspects fabric state (planned for the next
+# vajrayana fabric-peer probe).
+
+agents:
+
+  # Audit sink — the central record of every cluster alert.
+  - type: declarative
+    id: 1
+    priority: 2
+    config:
+      consume_types: [700]
+      persist_path: graph/aggregator_alerts.jsonl
