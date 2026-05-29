@@ -1,0 +1,53 @@
+# codex_monk — multiswarm composition
+#
+# This file is the user-facing surface of the agentic OS. Sub-swarms are
+# composed by include + state-prefix + fabric-path. Each sub-swarm runs in
+# its own OS process, owns its own mmap fabric, and reaches the others
+# only via gateway agents speaking the VJR wire protocol.
+#
+# After this file lands, all new behavior is YAML + genomes. New probe
+# kinds and new opcodes are explicit (Phase B) follow-ups; nothing in
+# this composition layer should ever need new Python again.
+
+multiswarm:
+  id: 1
+  name: "codex-multiswarm"
+
+security:
+  # HMAC-SHA256 pre-shared key for VJR. Override in the environment.
+  psk: "${VJR_PSK:dev_psk_change_me}"
+
+swarms:
+
+  # ──────────────────────────────────────────────────────────────────────
+  # KERNEL — the original PSI/swap/mem sensor + local audit sink.
+  # Cross-swarm: routes type-700 alerts through its gateway to evolver.
+  - name: kernel
+    include: swarms/kernel.yaml
+    state_prefix: "swarm.kernel."
+    fabric_path: "/dev/shm/codex.kernel.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19101"
+      peers:
+        - { name: evolver, addr: "127.0.0.1:19102" }
+      routes:
+        # When a kernel agent sends type=700 to the local gateway,
+        # forward it to the evolver swarm's audit sink at agent id 1.
+        - { type: 700, peer: evolver, agent: 1 }
+
+  # ──────────────────────────────────────────────────────────────────────
+  # EVOLVER — separate fabric, hosts an audit sink that receives kernel
+  # alerts over the gateway. Proves cross-swarm messaging works end-to-end.
+  # The actual genome-evolution machinery (mutator-role agents writing
+  # back across the gateway) is Phase B and deliberately out of scope here.
+  - name: evolver
+    include: swarms/evolver.yaml
+    state_prefix: "swarm.evolver."
+    fabric_path: "/dev/shm/codex.evolver.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19102"
+      peers:
+        - { name: kernel, addr: "127.0.0.1:19101" }
+      routes: []   # evolver doesn't originate cross-swarm traffic yet

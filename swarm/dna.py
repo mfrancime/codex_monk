@@ -31,12 +31,13 @@ class Agent:
         on_signal()  → handle non-system signals
     """
 
-    def __init__(self, agent_id, agent_type, priority):
-        self.id       = agent_id
-        self.type     = agent_type
-        self.priority = priority
-        self.fabric   = None
-        self.alive    = False
+    def __init__(self, agent_id, agent_type, priority, state_prefix=''):
+        self.id           = agent_id
+        self.type         = agent_type
+        self.priority     = priority
+        self.state_prefix = state_prefix
+        self.fabric       = None
+        self.alive        = False
 
     # ── lifecycle ─────────────────────────────────────
 
@@ -142,10 +143,13 @@ class Agent:
     # ── STANDARD CAPABILITIES (every agent gets these) ─
 
     def read_state(self, key):
-        return self.fabric.state_get(key)
+        return self.fabric.state_get(self.state_prefix + key)
 
     def write_state(self, key, value):
-        return self.fabric.state_set(key, value, self.id)
+        return self.fabric.state_set(self.state_prefix + key, value, self.id)
+
+    def read_state_raw(self, key):
+        return self.fabric.state_get(key)
 
     def send_msg(self, to_id, msg_type, payload=''):
         ok = self.fabric.inbox_send(self.id, to_id, msg_type, payload)

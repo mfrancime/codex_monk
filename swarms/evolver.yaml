@@ -1,0 +1,22 @@
+# evolver sub-swarm
+#
+# Phase A: just hosts a cross-swarm audit sink (id=1) that receives
+# kernel alerts forwarded by the gateways. This proves the multiswarm +
+# VJR bridge works end-to-end.
+#
+# Phase B will add mutator-role agents here that can rewrite kernel-
+# swarm genomes via gateway-side DNA-propose messages. Not in this
+# commit.
+#
+# state_prefix and fabric_path come from multiswarm.yaml.
+
+agents:
+
+  # Cross-swarm audit sink — receives type-700 from the kernel swarm
+  # over VJR and persists.
+  - type: declarative
+    id: 1
+    priority: 2
+    config:
+      consume_types: [700]
+      persist_path: graph/evolver_alerts.jsonl

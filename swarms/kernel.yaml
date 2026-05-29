@@ -1,0 +1,40 @@
+# kernel sub-swarm
+#
+# Carried forward from the original swarm.yaml. PSI/swap/mem sensor
+# (id=7) emits alerts to its local gateway (id=9), which routes them
+# across the VJR bridge to the evolver swarm's audit sink. A LOCAL
+# audit sink (id=1) also persists every alert here for resilience.
+#
+# state_prefix and fabric_path come from multiswarm.yaml; do not set
+# them here.
+
+agents:
+
+  # Local audit sink — consumes type-700 alerts that the sensor emits
+  # AS A SECOND TARGET. (The sensor currently emits to one narrator_id
+  # at a time, so this sink is only active if the sensor is reconfigured
+  # to point here.) Kept for parity with single-swarm mode.
+  - type: declarative
+    id: 1
+    priority: 2
+    config:
+      consume_types: [700]
+      persist_path: graph/kernel_alerts.jsonl
+
+  # Kernel telemetry sensor — same genome as single-swarm mode:
+  #   1. psi.full > 5                   → CRITICAL MEM_PSI_CRIT
+  #   2. psi.some > 10 AND no swap      → CRITICAL MEM_PSI_CRIT_NOSW
+  #   3. psi.some > 10                  → WARN     MEM_PSI_WARN
+  #   4. no swap                        → INFO     SWAP_ABSENT
+  #
+  # narrator_id: 9 routes every edge alert to the LOCAL GATEWAY, which
+  # forwards type=700 to the evolver swarm via VJR. To restore the
+  # legacy "local sink only" behavior, change narrator_id to 1.
+  - type: declarative
+    id: 7
+    priority: 1
+    config:
+      genome: "ψf‡5>→Cc;ψs‡10>~S0≡∧→Cn;ψs‡10>→Ww;~S0≡→Ia;"
+      narrator_id: 9
+      calm_interval: 10
+      alert_interval: 1

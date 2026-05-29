@@ -97,8 +97,32 @@ DECLARATIVE_TEMPLATE = AgentTemplate(
         'alert_interval': {'type': 'int',  'default': 1},
         'consume_types':  {'type': 'list', 'default': []},
         'persist_path':   {'type': 'str',  'default': None},
+        'state_prefix':   {'type': 'str',  'default': ''},
     },
     capabilities=['telemetry', 'psi', 'gate', 'sink', 'declarative'],
+    priority_default=1,
+)
+
+
+GATEWAY_TEMPLATE = AgentTemplate(
+    name='gateway',
+    description='Bridges sub-swarm fabrics over the VJR wire protocol. One per '
+                'sub-swarm. Routes local inbox messages to remote peers by '
+                'type-based routing table, posts inbound envelopes to local '
+                'fabric inboxes. The last big Python in codex_monk.',
+    accepts=[100, 700, 701, 702],
+    emits=[700, 701, 702],
+    signals=[],
+    state_keys=['gw.*'],
+    config_schema={
+        'swarm_name':   {'type': 'str',  'default': ''},
+        'bind':         {'type': 'str',  'default': '127.0.0.1:0'},
+        'peers':        {'type': 'list', 'default': []},
+        'routes':       {'type': 'list', 'default': []},
+        'psk':          {'type': 'str',  'default': ''},
+        'state_prefix': {'type': 'str',  'default': ''},
+    },
+    capabilities=['vjr', 'gateway', 'cross-swarm'],
     priority_default=1,
 )
 
@@ -152,7 +176,9 @@ def create_agent(cls_name, agent_id, agent_type, priority, config):
 
 def _register_builtins():
     from swarm.agents.declarative import DeclarativeAgent
+    from swarm.agents.gateway import GatewayAgent
     register(DECLARATIVE_TEMPLATE, DeclarativeAgent)
+    register(GATEWAY_TEMPLATE, GatewayAgent)
 
 
 _register_builtins()

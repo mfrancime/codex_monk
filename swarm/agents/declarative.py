@@ -60,8 +60,11 @@ class DeclarativeAgent(Agent):
                  # MUTATOR
                  mutate_target=None, mutation_interval=30,
                  mutation_lambda=4, fitness_scenario=None,
-                 mutation_seed=0):
-        super().__init__(agent_id, agent_type, priority)
+                 mutation_seed=0,
+                 # MULTISWARM
+                 state_prefix=''):
+        super().__init__(agent_id, agent_type, priority,
+                         state_prefix=state_prefix)
         # probe
         self.genome = genome or ''
         self.narrator_id = int(narrator_id) if narrator_id is not None else None

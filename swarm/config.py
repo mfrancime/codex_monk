@@ -87,6 +87,113 @@ def _validate(cfg):
         ids.add(aid)
 
 
+# ── Multiswarm loader ─────────────────────────────────
+
+def is_multiswarm(cfg):
+    """True if the config file is a multiswarm composition (root key
+    `multiswarm:` + `swarms:` list of sub-swarms). False if it's a single
+    swarm config."""
+    return 'multiswarm' in cfg and 'swarms' in cfg
+
+
+def load_multiswarm(config_path):
+    """Load a multiswarm composition and return a list of fully-resolved
+    sub-swarm configs. Each entry is the same shape `load()` returns for
+    a single swarm, plus `state_prefix` + `fabric_path` injected, and a
+    gateway agent appended if the sub-swarm declared one.
+
+    Schema:
+        multiswarm: { id, name }
+        security: { psk: "${VJR_PSK:default}" }
+        swarms:
+          - name: kernel
+            include: swarms/kernel.yaml
+            state_prefix: "swarm.kernel."
+            fabric_path: "/dev/shm/codex.kernel.fabric"
+            gateway:
+              id: 9
+              bind: "127.0.0.1:19101"
+              peers: [{name, addr}, ...]
+              routes: [{type, peer, agent}, ...]
+    """
+    with open(config_path, 'r', encoding='utf-8') as f:
+        root = yaml.safe_load(f)
+    root = _resolve_deep(root)
+
+    assert 'multiswarm' in root, 'missing multiswarm: section'
+    assert 'swarms' in root, 'missing swarms: list'
+    assert isinstance(root['swarms'], list), 'swarms: must be a list'
+
+    ms_meta = root['multiswarm']
+    multiswarm_id   = int(ms_meta.get('id', 1))
+    multiswarm_name = str(ms_meta.get('name', 'multiswarm'))
+
+    psk = root.get('security', {}).get('psk', '')
+
+    base_dir = os.path.dirname(os.path.abspath(config_path))
+
+    sub_swarms = []
+    for entry in root['swarms']:
+        name         = str(entry['name'])
+        include_path = entry['include']
+        state_prefix = str(entry.get('state_prefix', f'swarm.{name}.'))
+        fabric_path  = entry.get('fabric_path')
+
+        if not os.path.isabs(include_path):
+            include_path = os.path.join(base_dir, include_path)
+        with open(include_path, 'r', encoding='utf-8') as f:
+            sub = yaml.safe_load(f) or {}
+        sub = _resolve_deep(sub)
+
+        agents_list = list(sub.get('agents', []))
+
+        # Inject state_prefix into every agent's config so DeclarativeAgent
+        # / GatewayAgent see it at construction.
+        for a in agents_list:
+            a.setdefault('config', {})
+            a['config']['state_prefix'] = state_prefix
+
+        # Optional inline gateway agent declared by the multiswarm entry.
+        gw = entry.get('gateway')
+        if gw is not None:
+            gw_cfg = {
+                'swarm_name': name,
+                'bind':       gw.get('bind', '127.0.0.1:0'),
+                'peers':      gw.get('peers', []),
+                'routes':     gw.get('routes', []),
+                'psk':        psk,
+                'state_prefix': state_prefix,
+            }
+            agents_list.append({
+                'type': 'gateway',
+                'id':   int(gw['id']),
+                'priority': int(gw.get('priority', 1)),
+                'config': gw_cfg,
+            })
+
+        sub_cfg = {
+            'swarm': {
+                'id':     int(sub.get('swarm', {}).get('id', multiswarm_id)),
+                'name':   name,
+                'region': sub.get('swarm', {}).get(
+                    'region', ms_meta.get('region', '')),
+            },
+            'agents':       agents_list,
+            'state_prefix': state_prefix,
+            'fabric_path':  fabric_path,
+            'security':     {'psk': psk},
+        }
+        _validate(sub_cfg)
+        sub_swarms.append(sub_cfg)
+
+    return {
+        'multiswarm': {
+            'id': multiswarm_id, 'name': multiswarm_name,
+        },
+        'swarms': sub_swarms,
+    }
+
+
 # ── Convenience accessors ─────────────────────
 
 def swarm_id(cfg):
