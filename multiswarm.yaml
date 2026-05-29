@@ -50,4 +50,8 @@ swarms:
       bind: "127.0.0.1:19102"
       peers:
         - { name: kernel, addr: "127.0.0.1:19101" }
-      routes: []   # evolver doesn't originate cross-swarm traffic yet
+      routes:
+        # DNA proposals from the evolver's mutator (id=2) target the
+        # kernel sensor at agent id=7. The mutator sends type=701 to
+        # local gateway (id=9); this entry forwards it to kernel/7.
+        - { type: 701, peer: kernel, agent: 7 }

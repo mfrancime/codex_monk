@@ -1,0 +1,34 @@
+# noswap_spike — psi.some spike on a host with no swap configured.
+#
+# Tests the *severity-2* rule from the hand-coded sensor:
+#   ψs‡10> ~S 0≡ ∧ → CRITICAL MEM_PSI_CRIT_NOSW
+# psi.some > 10 on a no-swap host is much worse than the same pressure
+# on a host that can spill to swap — there's no relief valve, OOM is
+# imminent. The genome must escalate the same numerical PSI to CRIT_NOSW
+# rather than WARN when swap is absent.
+#
+# Contrast with fast_spike.yaml (same psi.some=12, but swap_present=true,
+# truth = WARN MEM_PSI_WARN). Same input, different verdict — that's the
+# whole point of the AND-NOT-SWAP rule.
+
+name: noswap_spike
+description: 50 calm ticks (no swap), then psi.some jumps to 12 (still no swap).
+ticks_total: 80
+
+phases:
+  - name: calm
+    range: [0, 49]
+    # NB: swap_present=false means the genome's `~S 0≡` rule (no-swap
+    # detected) fires every tick. The truth here is `INFO SWAP_ABSENT`,
+    # NOT null — the swarm correctly emits a baseline INFO when swap is
+    # absent on a calm system. See noswap_calm.yaml for the dedicated
+    # coverage of that path; here we want the spike rule to take over.
+    frame: { psi_some: 0.0, psi_full: 0.0, used_pct: 30.0, swap_present: false }
+    truth: { sev: INFO, code: SWAP_ABSENT }
+    deadline_ticks: 5
+
+  - name: noswap_pressure
+    range: [50, 79]
+    frame: { psi_some: 12.0, psi_full: 0.0, used_pct: 60.0, swap_present: false }
+    truth: { sev: CRITICAL, code: MEM_PSI_CRIT_NOSW }
+    deadline_ticks: 5

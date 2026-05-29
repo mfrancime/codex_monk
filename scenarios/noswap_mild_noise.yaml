@@ -1,0 +1,23 @@
+# noswap_mild_noise — a healthy no-swap host with low PSI noise.
+#
+# Closes the LAST FP loophole: a genome whose rule 2 fires on
+# `psi.some > 0 AND ~S` would page critically on any swap-less host
+# with normal background stall (psi.some ~2-3 is typical idle on a
+# loaded box). The hand-coded `ψs‡10>~S0≡∧→Cn` is safe because of the
+# `‡10` threshold; an evolver that drops it to `ψs0>~S0≡∧→Cn` would
+# pass calm_mild_noise (which has swap, so the AND short-circuits)
+# but fail HERE — no swap AND noise → false CRIT.
+#
+# Expected baseline: INFO SWAP_ABSENT (rule 4). Anything else is a
+# false positive.
+
+name: noswap_mild_noise
+description: 200 ticks, no swap, psi.some=2, psi.full=1 — baseline INFO only.
+ticks_total: 200
+
+phases:
+  - name: noswap_noisy_calm
+    range: [0, 199]
+    frame: { psi_some: 2.0, psi_full: 1.0, used_pct: 38.0, swap_present: false }
+    truth: { sev: INFO, code: SWAP_ABSENT }
+    deadline_ticks: 5

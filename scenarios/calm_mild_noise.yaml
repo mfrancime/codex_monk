@@ -1,0 +1,22 @@
+# calm_mild_noise — a healthy host with low background PSI noise.
+#
+# Real Linux hosts rarely show psi.some/full = 0.00 exactly. There's
+# always a little stall noise from normal scheduler activity, ~1-3 on
+# avg10 even at idle. A genome that gates on `psi.some > 0` (the
+# parsimony shortcut an evolver finds when the calm corpus is all
+# perfect-zero) would page constantly in production.
+#
+# This scenario closes that loophole: 200 ticks of healthy host with
+# psi.some=3, psi.full=1, sustained. truth: null — any non-OK edge is
+# a false positive. Forces any feasible genome's psi.some threshold
+# to be > 3 and its psi.full threshold to be > 1.
+
+name: calm_mild_noise
+description: 200 ticks healthy-but-noisy host. No alert allowed.
+ticks_total: 200
+
+phases:
+  - name: noisy_calm
+    range: [0, 199]
+    frame: { psi_some: 3.0, psi_full: 1.0, used_pct: 42.0, swap_present: true }
+    truth: null

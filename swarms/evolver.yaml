@@ -1,12 +1,12 @@
 # evolver sub-swarm
 #
-# Phase A: just hosts a cross-swarm audit sink (id=1) that receives
-# kernel alerts forwarded by the gateways. This proves the multiswarm +
-# VJR bridge works end-to-end.
-#
-# Phase B will add mutator-role agents here that can rewrite kernel-
-# swarm genomes via gateway-side DNA-propose messages. Not in this
-# commit.
+# Two agents:
+#   id=1 — cross-swarm audit sink; persists kernel alerts (type=700) that
+#          arrive over VJR.
+#   id=2 — cross-swarm MUTATOR; runs a (1+λ) loop locally over a scenario
+#          and proposes better genomes to the kernel sensor (kernel/id=7)
+#          via the local gateway (id=9). MSG_DNA_PROPOSE = 701 is routed
+#          by multiswarm.yaml to kernel/7.
 #
 # state_prefix and fabric_path come from multiswarm.yaml.
 
@@ -20,3 +20,22 @@ agents:
     config:
       consume_types: [700]
       persist_path: graph/evolver_alerts.jsonl
+
+  # Cross-swarm mutator — proposes new genomes to kernel/7 via local
+  # gateway (id=9). initial_genome is a short seed that fits in 48 UTF-8
+  # bytes (the inbox payload cap); the mutator parsimonizes from there.
+  #
+  # mutation_lambda=64 keeps each cycle searchy enough to find the rare
+  # 0-score-shorter mutation. mutation_interval=5s is fast enough for a
+  # demo and slow enough that the kernel sensor sees each adopted genome
+  # for several ticks before the next overwrite.
+  - type: declarative
+    id: 2
+    priority: 2
+    config:
+      propose_to: 9
+      initial_genome: "ψs‡5>→Ww"        # 13 UTF-8 bytes
+      fitness_scenario: scenarios/fast_spike.yaml
+      mutation_interval: 5
+      mutation_lambda: 64
+      mutation_seed: 7

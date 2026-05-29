@@ -1,0 +1,28 @@
+# boundary_full — hugs the CRIT threshold for psi.full.
+#
+# Forces the genome's psi.full threshold to be in [5, 6):
+#   - calm phase holds psi.full = 5.0 (must NOT fire)
+#   - spike phase jumps to psi.full = 6.0 (MUST fire — CRITICAL MEM_PSI_CRIT)
+#
+# This is the symmetric pin for the psi.full rule. The hand-coded `‡5`
+# is one of the few admissible integer choices.
+#
+# Companion to boundary_some.yaml; together they constrain the two
+# numerical thresholds the genome encodes.
+
+name: boundary_full
+description: 60 ticks at psi.full=5 (just under), then 30 ticks at 6.
+ticks_total: 90
+
+phases:
+  - name: at_threshold
+    range: [0, 59]
+    # psi.some held high enough to keep "no swap absent" rules from
+    # confusing the picture — but swap_present=true so no INFO either.
+    frame: { psi_some: 4.0, psi_full: 5.0, used_pct: 60.0, swap_present: true }
+    truth: null
+  - name: over_threshold
+    range: [60, 89]
+    frame: { psi_some: 14.0, psi_full: 6.0, used_pct: 75.0, swap_present: true }
+    truth: { sev: CRITICAL, code: MEM_PSI_CRIT }
+    deadline_ticks: 5

@@ -1,0 +1,24 @@
+# boundary_some — hugs the WARN threshold for psi.some.
+#
+# Forces the genome's psi.some threshold to be in [10, 11):
+#   - calm phase holds psi.some = 10.0 (must NOT fire — `>` is strict)
+#   - spike phase jumps to psi.some = 11.0 (MUST fire — WARN MEM_PSI_WARN)
+#
+# Any threshold < 10 generates a calm-phase FP (infeasible).
+# Any threshold >= 11 generates a spike-phase miss (heavy penalty).
+# The hand-coded `‡10` is one of the few admissible integer choices.
+
+name: boundary_some
+description: 60 ticks at psi.some=10 (just under), then 20 ticks at 11.
+ticks_total: 80
+
+phases:
+  - name: at_threshold
+    range: [0, 59]
+    frame: { psi_some: 10.0, psi_full: 0.0, used_pct: 45.0, swap_present: true }
+    truth: null
+  - name: over_threshold
+    range: [60, 79]
+    frame: { psi_some: 11.0, psi_full: 0.0, used_pct: 55.0, swap_present: true }
+    truth: { sev: WARN, code: MEM_PSI_WARN }
+    deadline_ticks: 5

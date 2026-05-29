@@ -1,0 +1,32 @@
+# boundary_noswap — pins rule-2's psi.some threshold on no-swap hosts.
+#
+# Companion to boundary_some.yaml (which pinned the WARN threshold on
+# swap-present hosts). Here we pin the CRIT_NOSW threshold:
+#
+#   ψs‡10> ~S 0≡ ∧ → CRITICAL MEM_PSI_CRIT_NOSW
+#
+# Calm phase holds psi.some=10 on a no-swap host. Truth is INFO
+# SWAP_ABSENT — the no-swap rule must surface, but rule 2 must NOT
+# escalate to CRIT (10 > 10 is false). Spike jumps to psi.some=11
+# (no swap) — rule 2 MUST fire CRIT_NOSW.
+#
+# Closes the last threshold gap. The 8-scenario corpus admitted any
+# threshold in (2, 12]; adding this pins it to [10, 11). Hand-coded
+# `‡10` is the unique admissible integer.
+
+name: boundary_noswap
+description: 80 ticks no-swap at psi.some=10 (INFO baseline), then 30 ticks at 11 (CRIT_NOSW).
+ticks_total: 110
+
+phases:
+  - name: noswap_at_threshold
+    range: [0, 79]
+    frame: { psi_some: 10.0, psi_full: 0.0, used_pct: 50.0, swap_present: false }
+    truth: { sev: INFO, code: SWAP_ABSENT }
+    deadline_ticks: 5
+
+  - name: noswap_over_threshold
+    range: [80, 109]
+    frame: { psi_some: 11.0, psi_full: 0.0, used_pct: 65.0, swap_present: false }
+    truth: { sev: CRITICAL, code: MEM_PSI_CRIT_NOSW }
+    deadline_ticks: 5

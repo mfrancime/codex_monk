@@ -91,6 +91,12 @@ def _run_one_swarm(cfg, label='swarm'):
                 os.makedirs(d, exist_ok=True)
             acfg['persist_path'] = pp
 
+        # resolve relative fitness_scenario (used by mutator role)
+        if acfg.get('fitness_scenario'):
+            fs = acfg['fitness_scenario']
+            if not os.path.isabs(fs):
+                acfg['fitness_scenario'] = os.path.join(root, fs)
+
         orch.spawn(atype, agent_id=aid, agent_type=aid,
                    priority=priority, **acfg)
 

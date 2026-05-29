@@ -20,19 +20,22 @@ agents:
       consume_types: [700]
       persist_path: graph/alerts.jsonl
 
-  # Kernel telemetry sensor — the genome IS the gate. This expresses, in
+  # Kernel telemetry sensor — the genome IS the gate. Four rules, in
   # priority order:
   #   1. psi.full > 5                        → CRITICAL MEM_PSI_CRIT
   #   2. psi.some > 10 AND swap absent       → CRITICAL MEM_PSI_CRIT_NOSW
   #   3. psi.some > 10                       → WARN     MEM_PSI_WARN
   #   4. swap absent (no pressure)           → INFO     SWAP_ABSENT
-  # First rule whose condition fires wins; falls through to (OK, OK) by
-  # default. Equivalent gate, expressible in YAML, no Python.
+  # First rule whose condition fires wins; falls through to (OK, OK).
+  #
+  # The genome below is the evolver's 37-char parsimonization of the
+  # hand-coded 42-char original; see swarms/kernel.yaml for the full
+  # derivation comment. Score 0 on the 9-scenario truth corpus.
   - type: declarative
     id: 7
     priority: 1
     config:
-      genome: "ψf‡5>→Cc;ψs‡10>~S0≡∧→Cn;ψs‡10>→Ww;~S0≡→Ia;"
+      genome: "ψf‡5>→Ccψs‡10>~S0≡∧→Cnψs‡10>→Ww~S≡→Ia"
       narrator_id: 1
       calm_interval: 10
       alert_interval: 1

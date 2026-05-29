@@ -46,6 +46,19 @@ from swarm.probes.kernel import sample_all, CAPS
 
 
 MSG_SYS_ALERT = 700
+
+# Cross-swarm DNA propose. The mutator role emits this on discovering a
+# better genome; a probe-role agent receiving it applies the payload to
+# its OWN DNA chain. Payload is the new genome as a UTF-8 string, up to
+# 48 bytes (the fabric inbox payload cap). Longer genomes will need a
+# fragmentation header (BEGIN/CHUNK/COMMIT) — deferred until a real
+# evolved genome actually exceeds the cap. The hand-coded sensor at 80
+# UTF-8 bytes already does; for v1 the mutator constrains its candidate
+# pool to short genomes so the propose-then-apply path is exercised
+# end-to-end without fragmentation.
+MSG_DNA_PROPOSE = 701
+DNA_PROPOSE_MAX_UTF8 = 48
+
 _FAST_CADENCE_PSI_SOME = 5.0
 
 
@@ -61,6 +74,15 @@ class DeclarativeAgent(Agent):
                  mutate_target=None, mutation_interval=30,
                  mutation_lambda=4, fitness_scenario=None,
                  mutation_seed=0,
+                 # MUTATOR — cross-swarm propose extension
+                 # When `propose_to` is set, the mutator does NOT write
+                 # locally via dna_storage; instead it sends MSG_DNA_PROPOSE
+                 # to that local id (typically the swarm's own gateway).
+                 # Routing carries it to the remote probe, whose on_message
+                 # handler applies the genome to its own DNA chain.
+                 # `initial_genome` is the starting genome the mutator
+                 # explores from when there's no local DNA to read.
+                 propose_to=None, initial_genome=None,
                  # MULTISWARM
                  state_prefix=''):
         super().__init__(agent_id, agent_type, priority,
@@ -79,6 +101,12 @@ class DeclarativeAgent(Agent):
         self.mutation_lambda = int(mutation_lambda)
         self._scenario = load_scenario(fitness_scenario) if fitness_scenario else None
         self._rng = random.Random(int(mutation_seed))
+        # mutator — cross-swarm
+        self.propose_to = int(propose_to) if propose_to is not None else None
+        self._initial_genome = initial_genome
+        # tracks the mutator's best-so-far when running propose-mode (no
+        # local DNA chain to read). Falls back to initial_genome at first cycle.
+        self._current_genome = None
 
         self._last_sev = None
         self._last_code = None
@@ -89,7 +117,10 @@ class DeclarativeAgent(Agent):
 
     # ── role dispatch ──────────────────────────────────────────────────────
     def on_tick(self):
-        if self.mutate_target is not None:
+        # MUTATOR is selected by either a local target (writes via
+        # dna_storage) or a propose_to (sends via gateway). Either one,
+        # or both, marks this agent as a mutator.
+        if self.mutate_target is not None or self.propose_to is not None:
             return self._tick_mutator()
         # PROBE or pure SINK
         return self._tick_probe()
@@ -154,9 +185,21 @@ class DeclarativeAgent(Agent):
             return False
         self._next_due = now + self.mutation_interval
 
-        current = dna_storage.read(self.fabric, self.mutate_target)
-        if not current:
-            return False    # target hasn't seeded its DNA yet
+        # Source the starting genome:
+        #   - propose-mode (cross-swarm): keep our own "best so far" in
+        #     memory; seed it from initial_genome on first cycle. We can't
+        #     read the remote probe's chain — that fabric is separate.
+        #   - local-mode: read from the target's DNA chain in OUR fabric.
+        if self.propose_to is not None:
+            if self._current_genome is None:
+                self._current_genome = self._initial_genome or ''
+            current = self._current_genome
+            if not current:
+                return False
+        else:
+            current = dna_storage.read(self.fabric, self.mutate_target)
+            if not current:
+                return False    # target hasn't seeded its DNA yet
 
         # local import to avoid the circular swarm.evolve -> swarm.fitness
         # -> swarm.agents.declarative path during module load.
@@ -178,16 +221,55 @@ class DeclarativeAgent(Agent):
         self.write_state('mut.best', f'{best_score["score"]:.0f}'[:20])
 
         if best_genome != current:
-            dna_storage.write(self.fabric, self.mutate_target,
-                              best_genome, writer=self.id)
             delta = best_score['score'] - cur_score['score']
-            self.log('mut.adopt', f'+{delta:.0f}'[:20])
+            if self.propose_to is not None:
+                # Cross-swarm: send the new genome via gateway. Drop the
+                # proposal silently if it exceeds the inbox payload cap —
+                # fragmentation is a known v1 limitation, see header.
+                encoded = best_genome.encode('utf-8')
+                if len(encoded) <= DNA_PROPOSE_MAX_UTF8:
+                    self.send_msg(self.propose_to, MSG_DNA_PROPOSE,
+                                  best_genome)
+                    self._current_genome = best_genome
+                    self.write_state('mut.proposed',
+                                     f'+{delta:.0f}/{len(best_genome)}'[:20])
+                    self.log('mut.propose', best_genome[:20])
+                else:
+                    self.write_state('mut.oversize',
+                                     str(len(encoded))[:20])
+                    self.fabric.log_append(self.id, VERB_ERROR,
+                                           'mut.oversize',
+                                           str(len(encoded))[:20])
+            else:
+                dna_storage.write(self.fabric, self.mutate_target,
+                                  best_genome, writer=self.id)
+                self.log('mut.adopt', f'+{delta:.0f}'[:20])
 
         return True
 
-    # ── SINK role ─────────────────────────────────────────────────────────
+    # ── SINK / DNA-INBOUND role ───────────────────────────────────────────
     def on_message(self, msg):
         mtype = msg.get('type')
+
+        # PROBE-side DNA inbound: a cross-swarm mutator (or any peer) has
+        # proposed a new genome for THIS agent. Apply it via the same
+        # dna_storage chain the probe normally reads from at on_tick. The
+        # interpreter is robust to garbage; worst case is a wrong verdict
+        # for one tick if the proposal is broken.
+        if mtype == MSG_DNA_PROPOSE and self.genome:
+            new_genome = (msg.get('payload') or '')
+            if new_genome:
+                dna_storage.write(self.fabric, self.id, new_genome,
+                                  writer=int(msg.get('sender', 0)))
+                # Update in-memory cached genome so the next tick reads the
+                # adopted one rather than the YAML-seeded one. dna_storage
+                # is still the source of truth — this is just a hint.
+                self.genome = new_genome
+                self.log('dna.applied', new_genome[:20])
+                self.write_state('dna.adopted_at',
+                                 str(int(time.time()))[:20])
+            return
+
         if mtype not in self.consume_types:
             return
 

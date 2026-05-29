@@ -21,20 +21,38 @@ agents:
       consume_types: [700]
       persist_path: graph/kernel_alerts.jsonl
 
-  # Kernel telemetry sensor — same genome as single-swarm mode:
+  # Kernel telemetry sensor — same four rules as the hand-coded
+  # original, expressed in 5 fewer chars:
   #   1. psi.full > 5                   → CRITICAL MEM_PSI_CRIT
   #   2. psi.some > 10 AND no swap      → CRITICAL MEM_PSI_CRIT_NOSW
   #   3. psi.some > 10                  → WARN     MEM_PSI_WARN
   #   4. no swap                        → INFO     SWAP_ABSENT
   #
-  # narrator_id: 9 routes every edge alert to the LOCAL GATEWAY, which
+  # This is the evolver's discovery (seed=7, λ=8, 400 gens) seeded from
+  # the hand-coded `ψf‡5>→Cc;ψs‡10>~S0≡∧→Cn;ψs‡10>→Ww;~S0≡→Ia;` (42 chars).
+  # The shrink is purely structural:
+  #   - all `;` separators removed (the interpreter clears stack on `;`
+  #     but a `→XY` that fires also halts, and a `→XY` that doesn't
+  #     fire leaves no stack residue that the next rule's loads would
+  #     misinterpret — so `;` is provably redundant here);
+  #   - the final `~S0≡` shrunk to `~S≡` (the EQ comparator pops two
+  #     values from the stack; with only `~S` on top, the second pop
+  #     underflows to 0, which is the same comparison `~S == 0` the
+  #     literal `0` was making explicit).
+  #
+  # Both `‡5` (psi.full CRIT) and `‡10` (psi.some WARN / CRIT_NOSW)
+  # thresholds are intact — pinned by boundary_full.yaml, boundary_some.yaml,
+  # and boundary_noswap.yaml. The 9-scenario truth corpus admits this
+  # genome at score 0, feasible, zero FP, zero miss.
+  #
+  # narrator_id: 9 routes edge alerts to the LOCAL GATEWAY (id=9), which
   # forwards type=700 to the evolver swarm via VJR. To restore the
   # legacy "local sink only" behavior, change narrator_id to 1.
   - type: declarative
     id: 7
     priority: 1
     config:
-      genome: "ψf‡5>→Cc;ψs‡10>~S0≡∧→Cn;ψs‡10>→Ww;~S0≡→Ia;"
+      genome: "ψf‡5>→Ccψs‡10>~S0≡∧→Cnψs‡10>→Ww~S≡→Ia"
       narrator_id: 9
       calm_interval: 10
       alert_interval: 1

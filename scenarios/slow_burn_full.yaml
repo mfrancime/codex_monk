@@ -1,0 +1,25 @@
+# slow_burn_full — psi.full slowly rises past the genome's threshold (5).
+#
+# This is the *severity-1* rule the hand-coded sensor expresses:
+#   ψf‡5> → CRITICAL MEM_PSI_CRIT
+# i.e. when the system is so memory-pressured that everything is blocked
+# (psi.full's "everything-stalled" line crosses 5), the genome must page
+# CRIT regardless of psi.some or swap state.
+#
+# Sustained pressure (not a flicker), so latency budget is generous.
+
+name: slow_burn_full
+description: Calm baseline 0..49, then psi.full climbs to 8 by tick 50 and sustains.
+ticks_total: 100
+
+phases:
+  - name: calm
+    range: [0, 49]
+    frame: { psi_some: 0.0, psi_full: 0.0, used_pct: 35.0, swap_present: true }
+    truth: null
+
+  - name: full_pressure
+    range: [50, 99]
+    frame: { psi_some: 14.0, psi_full: 8.0, used_pct: 70.0, swap_present: true }
+    truth: { sev: CRITICAL, code: MEM_PSI_CRIT }
+    deadline_ticks: 5

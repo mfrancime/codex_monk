@@ -1,0 +1,22 @@
+# swap_absent_calm — host with no swap, no pressure, ever.
+#
+# Tests the *fallback INFO* rule from the hand-coded sensor:
+#   ~S 0≡ → INFO SWAP_ABSENT
+# The genome's job is to surface the no-swap condition exactly once at
+# baseline (so an operator notices), and then NOT spam — edge emission
+# means a single INFO at tick 0 and silence thereafter.
+#
+# This scenario is the explicit truth-corpus entry for the lowest-severity
+# rule, the one most likely to get culled by an evolver that's only graded
+# on heavier rules.
+
+name: swap_absent_calm
+description: 100 ticks, no swap, no pressure. Expect one INFO at baseline.
+ticks_total: 100
+
+phases:
+  - name: noswap_calm
+    range: [0, 99]
+    frame: { psi_some: 0.0, psi_full: 0.0, used_pct: 25.0, swap_present: false }
+    truth: { sev: INFO, code: SWAP_ABSENT }
+    deadline_ticks: 5
