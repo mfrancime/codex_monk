@@ -1,0 +1,27 @@
+# bytecode + caches
+__pycache__/
+*.pyc
+*.pyo
+
+# shared-memory fabric files end up here on Linux dev boxes
+*.fabric
+
+# transient runtime data — the swarm writes audit jsonl into ./graph
+# at runtime; the directory is committed for shape (empty) but its
+# contents are not.
+/graph/*.jsonl
+
+# orphan temp files left by half-finished pip operations
+/requirements.txt.tmp.*
+
+# editor + OS
+.vscode/
+.idea/
+.DS_Store
+
+# venv / build artifacts
+/.venv/
+/venv/
+/build/
+/dist/
+*.egg-info/

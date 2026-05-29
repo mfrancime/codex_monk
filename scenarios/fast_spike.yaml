@@ -1,0 +1,27 @@
+# fast_spike — a clean PSI 'some' spike after a calm baseline.
+#
+# Truth contract: each phase declares the synthetic frame shape held over a
+# tick range AND the (sev, code) the swarm SHOULD emit. `truth: null` means
+# the phase is calm — any edge emit during it is a false positive. A phase
+# with a truth block expects a matching edge to land within deadline_ticks of
+# phase start; missing it counts as a miss; emitting it later counts as
+# latency = (emit_tick - phase_start).
+#
+# This is the truth corpus for fitness — code never invents what's "right",
+# it reads it from here.
+
+name: fast_spike
+description: 60 calm ticks (PSI quiet, swap present), then PSI some jumps to 12.
+ticks_total: 80
+
+phases:
+  - name: calm
+    range: [0, 59]
+    frame: { psi_some: 0.0, psi_full: 0.0, used_pct: 30.0, swap_present: true }
+    truth: null                              # any edge here is a FP
+
+  - name: spike
+    range: [60, 79]
+    frame: { psi_some: 12.0, psi_full: 0.0, used_pct: 50.0, swap_present: true }
+    truth: { sev: WARN, code: MEM_PSI_WARN }
+    deadline_ticks: 5                        # must fire by tick 65
