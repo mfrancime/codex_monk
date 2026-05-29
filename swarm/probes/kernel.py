@@ -253,19 +253,82 @@ class TelemetryFrame:
         }
 
 
-def sample_all() -> TelemetryFrame:
-    """Single cheap read of every probe. Safe to call every tick."""
-    return TelemetryFrame(
+def _frame_dict(tf: TelemetryFrame) -> dict:
+    """Flatten a TelemetryFrame into the dict shape the probe registry
+    contract requires. Keys match what the OPCODES table below references."""
+    mem = tf.mem
+    return {
+        'ts':                  tf.ts,
+        'psi.available':       tf.psi_mem.available,
+        'psi.some.avg10':      tf.psi_mem.some.avg10,
+        'psi.some.avg60':      tf.psi_mem.some.avg60,
+        'psi.full.avg10':      tf.psi_mem.full.avg10,
+        'psi.full.avg60':      tf.psi_mem.full.avg60,
+        'mem.total_kb':        mem.total_kb,
+        'mem.available_kb':    mem.available_kb,
+        'mem.used_pct':        mem.used_pct,
+        'mem.avail_pct':       100.0 - mem.used_pct,
+        'mem.swap_total_kb':   mem.swap_total_kb,
+        'mem.swap_present':    mem.has_swap,
+        'mem.swap_total_mb':   mem.swap_total_mb,
+        'cgroup.available':    tf.cgroup.available,
+        'cgroup.current_bytes': tf.cgroup.current_bytes,
+        'cgroup.oom_kills':    tf.cgroup.oom_kill_events,
+    }
+
+
+def sample_all() -> dict:
+    """Single cheap read of every kernel signal, flattened into a dict
+    Frame. Safe to call every tick. The TelemetryFrame dataclass is kept
+    as an INTERNAL building block (so existing callers that introspect
+    `.psi_mem.some.avg10` keep working) — but the registered contract
+    returns the dict."""
+    tf = TelemetryFrame(
         ts=time.time(),
         caps=asdict(CAPS),
         psi_mem=read_psi("memory"),
         mem=read_mem(),
         cgroup=read_cgroup(),
     )
+    return _frame_dict(tf)
+
+
+def describe() -> str:
+    """Boot-banner one-liner. Picks the live mode based on CAPS."""
+    mode = 'psi+swap+cgroup' if (CAPS.psi_memory and CAPS.cgroup_v2) else (
+        'psi+swap' if CAPS.psi_memory else 'fallback_level')
+    return f'kernel ({mode})'
+
+
+# ── opcode alphabet (the kernel domain's load tokens) ────────────────────
+#
+# Disjoint first chars (ψ, ~, κ) so cgroup_pods / disk_net / k8s_api can
+# coexist in the same agent's interpreter call by table-merging.
+
+OPCODES = {
+    'ψ': {
+        's': 'psi.some.avg10',
+        'f': 'psi.full.avg10',
+        '?': 'psi.available',
+    },
+    '~': {
+        'u': 'mem.used_pct',
+        'a': 'mem.avail_pct',
+        'S': 'mem.swap_present',
+        's': 'mem.swap_total_mb',
+    },
+    'κ': {
+        '?': 'cgroup.available',
+    },
+}
+
+
+# Register with the plugin system at import time.
+from swarm.probes import register as _register
+_register('kernel', sample_all, OPCODES, describe)
 
 
 if __name__ == "__main__":
     import json
-    frame = sample_all()
-    print("capabilities:", json.dumps(frame.caps, indent=2))
-    print("fabric frame:", json.dumps(frame.to_fabric(), indent=2))
+    print("capabilities:", json.dumps(asdict(CAPS), indent=2))
+    print("Frame:", json.dumps(sample_all(), indent=2, default=str))

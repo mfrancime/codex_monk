@@ -105,6 +105,7 @@ DECLARATIVE_TEMPLATE = AgentTemplate(
         'propose_to':        {'type': 'int',  'default': None},
         'initial_genome':    {'type': 'str',  'default': None},
         'state_prefix':      {'type': 'str',  'default': ''},
+        'probe':             {'type': 'str',  'default': 'kernel'},
     },
     capabilities=['telemetry', 'psi', 'gate', 'sink', 'mutator', 'declarative'],
     priority_default=1,

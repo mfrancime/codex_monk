@@ -28,9 +28,6 @@ import sys
 import tempfile
 
 from swarm.fabric import Fabric
-from swarm.probes.kernel import (
-    TelemetryFrame, PSISample, PSILine, MemSample, CgroupSample,
-)
 from swarm import template
 import swarm.agents.declarative as declarative
 
@@ -48,15 +45,25 @@ def _check(label, cond):
 def _frame(psi_some, psi_full, used_pct, swap_present):
     total = 100_000
     avail = int(total * (1.0 - used_pct / 100.0))
-    swap = 1_048_576 if swap_present else 0
-    return TelemetryFrame(
-        ts=0.0, caps={},
-        psi_mem=PSISample(available=True,
-                          some=PSILine(avg10=psi_some),
-                          full=PSILine(avg10=psi_full)),
-        mem=MemSample(total_kb=total, available_kb=avail,
-                      swap_total_kb=swap, swap_free_kb=swap),
-        cgroup=CgroupSample(available=False))
+    swap_kb = 1_048_576 if swap_present else 0
+    return {
+        'ts':                  0.0,
+        'psi.available':       True,
+        'psi.some.avg10':      psi_some,
+        'psi.some.avg60':      0.0,
+        'psi.full.avg10':      psi_full,
+        'psi.full.avg60':      0.0,
+        'mem.total_kb':        total,
+        'mem.available_kb':    avail,
+        'mem.used_pct':        used_pct,
+        'mem.avail_pct':       100.0 - used_pct,
+        'mem.swap_total_kb':   swap_kb,
+        'mem.swap_present':    swap_present,
+        'mem.swap_total_mb':   swap_kb / 1024.0,
+        'cgroup.available':    False,
+        'cgroup.current_bytes': 0,
+        'cgroup.oom_kills':    0,
+    }
 
 
 class FrameStub:

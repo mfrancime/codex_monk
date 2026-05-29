@@ -15,10 +15,8 @@ invents ground truth — it loads it from scenarios/*.yaml.
 
 import yaml
 
-from swarm.probes.kernel import (
-    TelemetryFrame, PSISample, PSILine, MemSample, CgroupSample,
-)
 from swarm.genome import interpret
+from swarm.probes.kernel import OPCODES as KERNEL_OPCODES
 
 
 FP_BUDGET = 0           # calm-phase FPs — hard constraint, no exceptions
@@ -30,16 +28,30 @@ INFEASIBLE_SCORE = -1e9
 
 
 def _make_frame(psi_some, psi_full, used_pct, swap_present):
+    """Build a synthetic kernel-probe Frame (dict) for scenario replay.
+    Keys must match swarm/probes/kernel.py's _frame_dict shape — that's
+    the contract the OPCODES table is wired against."""
     total = 100_000
     avail = int(total * (1.0 - used_pct / 100.0))
-    swap = 1_048_576 if swap_present else 0
-    mem = MemSample(total_kb=total, available_kb=avail,
-                    swap_total_kb=swap, swap_free_kb=swap)
-    psi = PSISample(available=True,
-                    some=PSILine(avg10=psi_some),
-                    full=PSILine(avg10=psi_full))
-    return TelemetryFrame(ts=0.0, caps={}, psi_mem=psi, mem=mem,
-                          cgroup=CgroupSample(available=False))
+    swap_kb = 1_048_576 if swap_present else 0
+    return {
+        'ts':                  0.0,
+        'psi.available':       True,
+        'psi.some.avg10':      psi_some,
+        'psi.some.avg60':      0.0,
+        'psi.full.avg10':      psi_full,
+        'psi.full.avg60':      0.0,
+        'mem.total_kb':        total,
+        'mem.available_kb':    avail,
+        'mem.used_pct':        used_pct,
+        'mem.avail_pct':       100.0 - used_pct,
+        'mem.swap_total_kb':   swap_kb,
+        'mem.swap_present':    swap_present,
+        'mem.swap_total_mb':   swap_kb / 1024.0,
+        'cgroup.available':    False,
+        'cgroup.current_bytes': 0,
+        'cgroup.oom_kills':    0,
+    }
 
 
 def load_scenario(path):
@@ -67,7 +79,7 @@ def replay(genome, scenario):
         f = ph['frame']
         frame = _make_frame(
             f['psi_some'], f['psi_full'], f['used_pct'], f['swap_present'])
-        sev, code = interpret(genome, frame)
+        sev, code = interpret(genome, frame, KERNEL_OPCODES)
         if (sev, code) != last:
             edges.append((tick, sev, code))
             last = (sev, code)

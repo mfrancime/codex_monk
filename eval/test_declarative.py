@@ -33,35 +33,36 @@ import sys
 import tempfile
 
 from swarm.fabric import Fabric, VERB_ERROR, VERB_NAMES
-from swarm.probes.kernel import (
-    TelemetryFrame, PSISample, PSILine, MemSample, CgroupSample,
-)
 from swarm import template, dna_storage
 import swarm.agents.declarative as declarative
 
 
 # ── synthetic frame factory ───────────────────────────────────────────────
-
-def _mem(used_pct, swap_present):
-    total = 100_000
-    avail = int(total * (1.0 - used_pct / 100.0))
-    swap = 1_048_576 if swap_present else 0
-    return MemSample(total_kb=total, available_kb=avail,
-                     swap_total_kb=swap, swap_free_kb=swap)
-
-
-def _psi(some10=0.0, full10=0.0):
-    return PSISample(available=True,
-                     some=PSILine(avg10=some10),
-                     full=PSILine(avg10=full10))
-
+# Build kernel-probe-shaped Frame dicts. Keys mirror what swarm/probes/kernel.py
+# emits at sample_all(); the agent reads them via frame.get(key).
 
 def _frame(psi_some, psi_full, used_pct, swap_present):
-    return TelemetryFrame(
-        ts=0.0, caps={},
-        psi_mem=_psi(psi_some, psi_full),
-        mem=_mem(used_pct, swap_present),
-        cgroup=CgroupSample(available=False))
+    total = 100_000
+    avail = int(total * (1.0 - used_pct / 100.0))
+    swap_kb = 1_048_576 if swap_present else 0
+    return {
+        'ts':                  0.0,
+        'psi.available':       True,
+        'psi.some.avg10':      psi_some,
+        'psi.some.avg60':      0.0,
+        'psi.full.avg10':      psi_full,
+        'psi.full.avg60':      0.0,
+        'mem.total_kb':        total,
+        'mem.available_kb':    avail,
+        'mem.used_pct':        used_pct,
+        'mem.avail_pct':       100.0 - used_pct,
+        'mem.swap_total_kb':   swap_kb,
+        'mem.swap_present':    swap_present,
+        'mem.swap_total_mb':   swap_kb / 1024.0,
+        'cgroup.available':    False,
+        'cgroup.current_bytes': 0,
+        'cgroup.oom_kills':    0,
+    }
 
 
 # ── shared test scaffolding ───────────────────────────────────────────────

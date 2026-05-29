@@ -37,12 +37,11 @@ import os
 import random
 import time
 
-from swarm import dna_storage
+from swarm import dna_storage, probes
 from swarm.dna import Agent
 from swarm.fabric import VERB_ERROR
 from swarm.fitness import load_scenario, score
 from swarm.genome import interpret
-from swarm.probes.kernel import sample_all, CAPS
 
 
 MSG_SYS_ALERT = 700
@@ -60,6 +59,13 @@ MSG_DNA_PROPOSE = 701
 DNA_PROPOSE_MAX_UTF8 = 48
 
 _FAST_CADENCE_PSI_SOME = 5.0
+
+
+# Test hook — tests monkey-patch this to a callable returning a synthetic
+# Frame dict. Production agents leave it None and use self._probe.sample_all()
+# from the resolved plugin. Kept as a module-level name so the existing test
+# pattern `declarative.sample_all = stub` keeps working post-refactor.
+sample_all = None
 
 
 class DeclarativeAgent(Agent):
@@ -84,7 +90,13 @@ class DeclarativeAgent(Agent):
                  # explores from when there's no local DNA to read.
                  propose_to=None, initial_genome=None,
                  # MULTISWARM
-                 state_prefix=''):
+                 state_prefix='',
+                 # PROBE PLUGIN
+                 # Selects which probe module supplies the Frame + opcodes
+                 # at on_tick. Default 'kernel' preserves the original
+                 # PSI/swap/mem behavior. Other domains: 'cgroup_pods',
+                 # 'disk_net', 'k8s_api', etc.
+                 probe='kernel'):
         super().__init__(agent_id, agent_type, priority,
                          state_prefix=state_prefix)
         # probe
@@ -107,6 +119,9 @@ class DeclarativeAgent(Agent):
         # tracks the mutator's best-so-far when running propose-mode (no
         # local DNA chain to read). Falls back to initial_genome at first cycle.
         self._current_genome = None
+        # probe plugin — resolve at construction so misconfig fails loudly
+        self.probe_name = probe
+        self._probe = probes.get(probe)
 
         self._last_sev = None
         self._last_code = None
@@ -141,30 +156,39 @@ class DeclarativeAgent(Agent):
         if now < self._next_due:
             return (self._next_due - now) < self.calm_interval
 
-        frame = sample_all()
+        frame = (sample_all() if sample_all is not None
+                 else self._probe.sample_all())
 
         if not self._announced:
-            mode = 'psi' if CAPS.psi_memory else 'fallback_level'
-            self.write_state('sys.mode', mode)
-            self.write_state('sys.psi.on', '1' if CAPS.psi_memory else '0')
-            self.log('agent.boot', mode)
+            mode = self._probe.describe()
+            self.write_state('sys.mode', mode[:20])
+            self.write_state('sys.psi.on',
+                             '1' if frame.get('psi.available') else '0')
+            self.log('agent.boot', mode[:20])
             self._announced = True
 
-        # compact dumb numbers
-        self.write_state('sys.ts',          str(int(frame.ts)))
-        self.write_state('sys.mem.availmb', str(int(frame.mem.available_kb / 1024)))
-        self.write_state('sys.mem.usedpct', f'{frame.mem.used_pct:.1f}')
-        self.write_state('sys.swap.mb',     str(int(frame.mem.swap_total_mb)))
-        self.write_state('sys.psi.some10',  f'{frame.psi_mem.some.avg10:.2f}')
-        self.write_state('sys.psi.full10', f'{frame.psi_mem.full.avg10:.2f}')
+        # compact dumb numbers — kernel-domain keys. For non-kernel probes
+        # the same Frame keys won't exist; the .get(..., 0) defaults keep
+        # this loop safe. The state-write surface is per-domain-meaningful
+        # only when the probe IS the kernel probe.
+        self.write_state('sys.ts',          str(int(frame.get('ts', 0))))
+        self.write_state('sys.mem.availmb',
+                         str(int(frame.get('mem.available_kb', 0) / 1024)))
+        self.write_state('sys.mem.usedpct', f'{frame.get("mem.used_pct", 0.0):.1f}')
+        self.write_state('sys.swap.mb',
+                         str(int(frame.get('mem.swap_total_mb', 0))))
+        self.write_state('sys.psi.some10',
+                         f'{frame.get("psi.some.avg10", 0.0):.2f}')
+        self.write_state('sys.psi.full10',
+                         f'{frame.get("psi.full.avg10", 0.0):.2f}')
 
-        sev, code = interpret(live, frame)
+        sev, code = interpret(live, frame, self._probe.opcodes)
         self.write_state('sys.sev',  sev[:20])
         self.write_state('sys.code', code[:20])
 
         rising = (sev != 'OK'
-                  or (frame.psi_mem.available
-                      and frame.psi_mem.some.avg10 >= _FAST_CADENCE_PSI_SOME))
+                  or (frame.get('psi.available')
+                      and frame.get('psi.some.avg10', 0.0) >= _FAST_CADENCE_PSI_SOME))
         self._next_due = now + (self.alert_interval if rising else self.calm_interval)
 
         if (sev, code) != (self._last_sev, self._last_code):

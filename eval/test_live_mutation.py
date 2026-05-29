@@ -30,9 +30,7 @@ import tempfile
 from swarm.fabric import Fabric
 from swarm.fitness import score, load_scenario
 from swarm.genome import interpret
-from swarm.probes.kernel import (
-    PSISample, PSILine, MemSample, CgroupSample, TelemetryFrame,
-)
+from swarm.probes.kernel import OPCODES as KERNEL_OPCODES
 from swarm import template, dna_storage
 
 
@@ -47,18 +45,29 @@ CYCLES = 80
 
 
 def _spike_frame():
-    """The frame the target would see during the spike phase of fast_spike."""
+    """The frame the target would see during the spike phase of fast_spike,
+    as a kernel-probe Frame dict."""
     total = 100_000
     avail = int(total * 0.5)             # used_pct=50
-    swap = 1_048_576                     # swap present
-    return TelemetryFrame(
-        ts=0.0, caps={},
-        psi_mem=PSISample(available=True,
-                          some=PSILine(avg10=12.0),
-                          full=PSILine(avg10=0.0)),
-        mem=MemSample(total_kb=total, available_kb=avail,
-                      swap_total_kb=swap, swap_free_kb=swap),
-        cgroup=CgroupSample(available=False))
+    swap_kb = 1_048_576                  # swap present
+    return {
+        'ts':                  0.0,
+        'psi.available':       True,
+        'psi.some.avg10':      12.0,
+        'psi.some.avg60':      0.0,
+        'psi.full.avg10':      0.0,
+        'psi.full.avg60':      0.0,
+        'mem.total_kb':        total,
+        'mem.available_kb':    avail,
+        'mem.used_pct':        50.0,
+        'mem.avail_pct':       50.0,
+        'mem.swap_total_kb':   swap_kb,
+        'mem.swap_present':    True,
+        'mem.swap_total_mb':   swap_kb / 1024.0,
+        'cgroup.available':    False,
+        'cgroup.current_bytes': 0,
+        'cgroup.oom_kills':    0,
+    }
 
 
 def main():
@@ -112,7 +121,8 @@ def main():
 
         # PROBE half: re-interpret the post-mutation DNA against a spike
         # frame. This is what the target agent's next on_tick would compute.
-        spike_sev, spike_code = interpret(final, _spike_frame())
+        spike_sev, spike_code = interpret(final, _spike_frame(),
+                                          KERNEL_OPCODES)
 
         print(f"\n  mutator cycles ran:   {mut_cycles}")
         print(f"  mut.best (fabric):    {mut_best}")
