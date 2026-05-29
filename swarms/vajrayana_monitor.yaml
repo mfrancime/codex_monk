@@ -1,0 +1,53 @@
+# vajrayana_monitor sub-swarm
+#
+# Three agents:
+#   id=1 — local audit sink. Persists every alert observed about the peer
+#          to graph/vajrayana_alerts.jsonl for the operator timeline.
+#   id=2 — fabric_peer sensor. Reads /dev/shm/swarm.fabric (vajrayana's
+#          shared memory) each tick and runs the gate genome.
+
+agents:
+
+  - type: declarative
+    id: 1
+    priority: 2
+    config:
+      consume_types: [700]
+      persist_path: graph/vajrayana_alerts.jsonl
+
+  - type: declarative
+    id: 2
+    priority: 1
+    config:
+      probe: fabric_peer
+      # Gate, in priority order — first rule that fires wins:
+      #
+      # 1. peer fabric absent (vajrayana not running)
+      #    Ψa < 1  → CRITICAL GATE_DOWN
+      #
+      # 2. peer reports its OWN sev as CRITICAL (cascade)
+      #    Ψv ≥ 3  → CRITICAL CLUSTER_DEGRADED
+      #
+      # 3. peer's gateway not connected (Ollama unreachable typically)
+      #    Ψg < 1  → CRITICAL GATE_DOWN
+      #
+      # 4. peer's heartbeat stale (Ollama latency tail / process hung)
+      #    Ψh > 120  → CRITICAL CLUSTER_DEGRADED
+      #
+      # 5. BM25 brittleness signal — last query scored high but no new
+      #    queries observed (gate took something it shouldn't have).
+      #    Ψs > 5 AND Ψd < 2  → WARN POD_PRESSURE
+      #    (Loose; you'll tighten this with a truth corpus over real
+      #    vajrayana traces.)
+      #
+      # 6. peer memory pressure — surface vajrayana's own PSI as WARN
+      #    Ψp > 10  → WARN MEM_PSI_WARN
+      #
+      # 7. corpus shrank unexpectedly
+      #    Ψr < 1   → INFO SWAP_ABSENT (reusing INFO/SWAP_ABSENT slot
+      #               while the truth corpus is small — replace with a
+      #               domain-specific code later)
+      genome: "Ψa1<→Cg;Ψv3≥→Cd;Ψg1<→Cg;Ψh‡120>→Cd;Ψs5>Ψd2<∧→Wp;Ψp‡10>→Ww;Ψr1<→Ia"
+      narrator_id: 9
+      calm_interval: 10
+      alert_interval: 1

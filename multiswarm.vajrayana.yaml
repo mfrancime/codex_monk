@@ -1,0 +1,41 @@
+# codex_monk — vajrayana RAG monitor
+#
+# Single sub-swarm that watches a sibling vajrayana swarm via fabric
+# introspection. Vajrayana's fabric format is byte-identical with
+# codex_monk's (same forked DNA), so the fabric_peer probe just opens
+# the peer's /dev/shm/swarm.fabric and reads the state slots vajrayana's
+# agents already write. No instrumentation needed in vajrayana itself.
+#
+# Default peer path is `/dev/shm/swarm.fabric` (vajrayana's Linux/WSL
+# default). For a Windows-side vajrayana instance, override via the
+# CODEX_PEER_FABRIC_PATH environment variable, e.g.
+#   export CODEX_PEER_FABRIC_PATH=/mnt/c/Users/<you>/AppData/Local/Temp/swarm.fabric
+#
+# The five vajrayana pain points encoded in the genome (per
+# /mnt/c/vajrayana/STACK.md and VAJ.md):
+#   1. BM25 gate brittleness — raw scores not normalized; gate accepts
+#      out-of-corpus questions with high enough overlap. Ψs threshold.
+#   2. Ollama latency tail — 24–101s per query. Inferred via heartbeat
+#      age and query rate (genome compares Ψh vs Ψq delta).
+#   3. Corpus staleness — extracts referencing absent docs. Ψr drop.
+#   4. Ollama unreachable — Ψg gateway status check.
+#   5. Memory freeze risk — peer's own PSI surfaced via Ψp.
+
+multiswarm:
+  id: 11
+  name: "codex-vajrayana-monitor"
+
+security:
+  psk: "${VJR_PSK:dev_psk_change_me}"
+
+swarms:
+
+  - name: vajrayana_monitor
+    include: swarms/vajrayana_monitor.yaml
+    state_prefix: "swarm.vajrayana_monitor."
+    fabric_path: "/dev/shm/codex.vajrayana_monitor.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19301"
+      peers: []        # standalone monitor; not bridged to a sibling
+      routes: []
