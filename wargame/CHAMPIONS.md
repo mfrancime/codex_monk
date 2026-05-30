@@ -1,9 +1,9 @@
 # Kubernetes Wargame — reigning champions
-_updated 2026-05-30 23:25:16 · 15 rounds total_
+_updated 2026-05-30 23:47:18 · 20 rounds total_
 
 ## pods  (`cgroup_pods`)
-- rung **3/4** · mastered **2/4**
-- champion genome: `Πp→Wp`  (score -250.0, feasible True)
+- rung **3/4** · mastered **3/4**
+- champion genome: `ΠpΠo→Cp→Wp`  (score -0.0, feasible True)
 
 ## nodes  (`k8s_api`)
 - rung **2/3** · mastered **1/3**
