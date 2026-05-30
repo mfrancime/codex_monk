@@ -1,5 +1,5 @@
 # Kubernetes Wargame — reigning champions
-_updated 2026-05-31 01:37:42 · 40 rounds total_
+_updated 2026-05-31 02:11:51 · 45 rounds total_
 
 ## pods  (`cgroup_pods`)
 - rung **4/4** · mastered **4/4**
@@ -15,8 +15,8 @@ _updated 2026-05-31 01:37:42 · 40 rounds total_
 
 ## etcd  (`k8s_api`)
 - rung **4/4** · mastered **4/4**
-- champion genome: `KdKxKnKl‡4000>→Cg‡20>→Il→∧I→Wg`  (score -0.0, feasible True)
+- champion genome: `KdKxKaKl‡4000>→Cg2>≠→∧C→Wg`  (score -0.0, feasible True)
 
 ## scheduler  (`k8s_api`)
 - rung **4/4** · mastered **4/4**
-- champion genome: `KdKd‡5>→Cd2>≠→WdK`  (score -0.0, feasible True)
+- champion genome: `KdKd5>→Cd2>→Wd`  (score -0.0, feasible True)
