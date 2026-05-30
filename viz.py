@@ -408,6 +408,46 @@ def _log_tail(path: str, n: int = 50) -> list:
         except: pass
 
 
+def _timeline(n: int = 400) -> dict:
+    """Reconstruct each swarm's severity history from its fabric event log.
+
+    The probe role logs an 'edge' entry (value 'SEV:CODE') on every verdict
+    change, so the log IS a recorded severity time-series — no extra capture
+    needed. This is the substrate the war-room's TIME MACHINE scrubs over:
+    per swarm, the ordered (ts, sev, code) edges from all its agents.
+    """
+    swarms = []
+    t_min = None
+    t_max = None
+    for p in _discover_fabrics():
+        fab = _open_fabric(p)
+        if fab is None:
+            continue
+        try:
+            head = fab.log_head()
+            start = max(1, head - n + 1)
+            events = []
+            for seq in range(start, head + 1):
+                r = fab.log_read(seq)
+                if r is None or r.get('key') != 'edge':
+                    continue
+                sev, _, code = (r.get('value') or '').partition(':')
+                ts = r.get('timestamp', 0) / 1_000_000.0   # micros → seconds
+                events.append({'seq': r['seq'], 'ts': ts, 'aid': r.get('aid'),
+                               'sev': sev or 'OK', 'code': code or 'OK'})
+                t_min = ts if t_min is None else min(t_min, ts)
+                t_max = ts if t_max is None else max(t_max, ts)
+            snap = _swarm_snapshot(p)
+            swarms.append({'path': p, 'name': snap.get('swarm_name'),
+                           'online': snap.get('online'), 'events': events})
+        finally:
+            try: fab.close()
+            except: pass
+    now = time.time()
+    return {'swarms': swarms, 't_min': t_min or now, 't_max': t_max or now,
+            'now': now}
+
+
 def _alerts_tail(n: int = 30) -> list:
     """Concatenate the tails of all graph/*.jsonl alert files. Returns the
     last N entries chronologically, newest first."""
@@ -607,6 +647,9 @@ class VizHandler(BaseHTTPRequestHandler):
         if path == '/api/alerts' and method == 'GET':
             n = int((qs.get('n') or ['30'])[0])
             return self._json({'entries': _alerts_tail(n)})
+        if path == '/api/timeline' and method == 'GET':
+            n = int((qs.get('n') or ['400'])[0])
+            return self._json(_timeline(n))
         if path == '/api/agent' and method == 'GET':
             fabric_path = (qs.get('path') or [''])[0]
             aid = int((qs.get('id') or ['0'])[0])

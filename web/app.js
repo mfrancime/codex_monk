@@ -160,8 +160,10 @@ function ensureWar3D() {
 function renderTopology() {
   ensureWar3D();
   if (window.War3D && _war3dStarted) {
-    window.War3D.setDefcon(STATE.defcon);
     window.War3D.update(STATE);
+    // while the TIME MACHINE is armed, it owns hub colors + DEFCON tint;
+    // don't let the live poll repaint over the replayed past.
+    if (!(window.TM && window.TM.armed)) window.War3D.setDefcon(STATE.defcon);
   }
   const swarms = STATE.swarms;
   const online = swarms.filter((s) => s.online).length;
@@ -279,7 +281,36 @@ async function refreshAlerts() {
 
 // ── drawer (agent detail / propose / frame inspect) ──────────────────────
 
+// Clicking a HUB (the big swarm sphere) calls this with id=null → show a
+// swarm-level summary built from STATE (no extra API call), reusing the
+// drawer's existing fields. Clicking an agent row/mesh keeps the id.
+function openSwarm(path) {
+  const s = STATE.swarms.find((x) => x.path === path);
+  if (!s) return;
+  STATE.selected = { path, id: null };
+  $('drawer').setAttribute('aria-hidden', 'false');
+  const short = s.swarm_name || path.split('/').pop();
+  $('drawer-title').textContent = `SWARM · ${short}`;
+  $('dr-fabric').textContent = path;
+  $('dr-role').textContent = `swarm · ${s.agents.length} agents`;
+  $('dr-state').textContent = s.online ? 'online' : 'offline';
+  $('dr-sev').textContent = s.severity || '—';
+  $('dr-sev').className = s.severity ? 'cell-sev-' + s.severity : '';
+  $('dr-pid').textContent = '—';
+  $('dr-hb').textContent = '—';
+  $('dr-genome').textContent = '(swarm view — click an agent below to inspect its DNA)';
+  $('dr-frame').textContent = '';
+  $('dr-result').textContent = '';
+  // agent roster as the var table
+  $('dr-vars').innerHTML = s.agents.map((a) =>
+    `<tr><td class="vk">#${a.id} ${a.role || ''}</td>` +
+    `<td class="vv cell-sev-${a.sev || '—'}">${a.sev || '—'}` +
+    `${a.code ? ' · ' + a.code : ''}</td></tr>`).join('')
+    || '<tr><td class="vk empty">no agents</td><td></td></tr>';
+}
+
 async function openDrawer(path, id) {
+  if (id === null || id === undefined) return openSwarm(path);
   STATE.selected = { path, id };
   $('drawer').setAttribute('aria-hidden', 'false');
   $('drawer-title').textContent =
@@ -374,7 +405,7 @@ async function refresh() {
     STATE.defcon = data.defcon || 5;
 
     setConn(true, 'LIVE');
-    setDefcon(STATE.defcon);
+    if (!(window.TM && window.TM.armed)) setDefcon(STATE.defcon);
     renderConfigs();
     renderProcs();
     renderProbes();
@@ -390,3 +421,111 @@ setInterval(refresh, POLL_MS);
 setInterval(refreshLog, LOG_POLL_MS);
 setInterval(refreshAlerts, ALERT_POLL_MS);
 refreshAlerts();
+
+// ── TIME MACHINE — scrub the swarm's recorded severity history ────────────
+//
+// The fabric event log already records every 'edge' (verdict change), so
+// /api/timeline hands us per-swarm (ts, sev) series. Dragging the scrubber
+// reconstructs each hub's color at that instant and drives the scene into
+// the past; LIVE snaps back to real time.
+
+const SEV_DEFCON = { CRITICAL: 1, WARN: 3, INFO: 4, OK: 5 };
+window.TM = { armed: false, tl: null, t: 0, playing: false };
+
+function _sevAtTime(events, T) {
+  let sev = 'OK';
+  for (const e of events) { if (e.ts <= T) sev = e.sev; else break; }
+  return sev;
+}
+
+async function tmLoad() {
+  try { window.TM.tl = await jget('/api/timeline?n=500'); }
+  catch (e) { window.TM.tl = null; }
+  return window.TM.tl;
+}
+
+function tmApply(T) {
+  const tl = window.TM.tl;
+  if (!tl || !window.War3D) return;
+  const sevByPath = {};
+  let worst = 5;
+  tl.swarms.forEach((s) => {
+    const sev = _sevAtTime(s.events, T);
+    sevByPath[s.path] = sev;
+    worst = Math.min(worst, SEV_DEFCON[sev] ?? 5);
+  });
+  window.War3D.setReplay(sevByPath);
+  window.War3D.setDefcon(worst);
+  setDefcon(worst);                     // body tint + banner reflect the past
+  $('tm-clock').textContent = new Date(T * 1000).toLocaleTimeString();
+}
+
+function tmSliderToTime(v) {
+  const tl = window.TM.tl;
+  if (!tl) return 0;
+  const span = Math.max(0.001, tl.t_max - tl.t_min);
+  return tl.t_min + (v / 1000) * span;
+}
+
+async function tmArm(v) {
+  if (!window.TM.tl) await tmLoad();
+  if (!window.TM.tl || !window.TM.tl.swarms.length) {
+    $('tm-clock').textContent = 'no history'; return;
+  }
+  window.TM.armed = true;
+  $('timemachine').classList.add('armed');
+  tmApply(tmSliderToTime(v));
+}
+
+function tmLive() {
+  window.TM.armed = false;
+  window.TM.playing = false;
+  $('timemachine').classList.remove('armed');
+  $('tm-scrub').value = 1000;
+  $('tm-clock').textContent = 'LIVE';
+  if (window.War3D) window.War3D.clearReplay();
+  refresh();                            // recolor to live immediately
+}
+
+$('tm-scrub').addEventListener('input', (e) => {
+  window.TM.playing = false;
+  tmArm(parseInt(e.target.value, 10));
+});
+$('tm-live').addEventListener('click', tmLive);
+$('tm-rewind').addEventListener('click', () => {
+  const s = $('tm-scrub'); s.value = Math.max(0, +s.value - 40); tmArm(+s.value);
+});
+$('tm-fwd').addEventListener('click', () => {
+  const s = $('tm-scrub'); s.value = Math.min(1000, +s.value + 40);
+  if (+s.value >= 1000) tmLive(); else tmArm(+s.value);
+});
+$('tm-play').addEventListener('click', async () => {
+  if (!window.TM.tl) await tmLoad();
+  window.TM.playing = !window.TM.playing;
+  if (window.TM.playing && +$('tm-scrub').value >= 1000) $('tm-scrub').value = 0;
+});
+setInterval(() => {
+  if (!window.TM.playing) return;
+  const s = $('tm-scrub');
+  const nv = +s.value + 8;
+  if (nv >= 1000) { tmLive(); return; }
+  s.value = nv; tmArm(nv);
+}, 200);
+
+// ── SCORE — gamified uptime: climbs while all-green, streak resets on crit ─
+let _score = 0, _streak = 1, _greenSecs = 0;
+setInterval(() => {
+  if (window.TM.armed) return;                 // don't score the past
+  const d = STATE.defcon || 5;
+  if (d === 5) {
+    _greenSecs++;
+    _streak = 1 + Math.floor(_greenSecs / 10); // every 10s green → +1 multiplier
+    _score += _streak;
+  } else {
+    _greenSecs = 0;
+    if (d === 1) _streak = 1;                   // CRITICAL breaks the streak
+  }
+  $('score-val').textContent = _score.toLocaleString();
+  $('score-streak').textContent = '×' + _streak;
+  $('score-chip').classList.toggle('hot', _streak >= 5);
+}, 1000);

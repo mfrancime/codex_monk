@@ -25,6 +25,11 @@
     <span class="lvl" id="defcon-lvl">5</span>
     <span class="state" id="defcon-state">NOMINAL</span>
   </div>
+  <div class="score-chip" title="Uptime defense score — climbs while all-green, streak resets on CRITICAL">
+    <span class="lbl">SCORE</span>
+    <span class="val" id="score-val">0</span>
+    <span class="streak" id="score-streak">×1</span>
+  </div>
   <div class="topo-readout"><span id="topo-meta">discovering fabrics…</span></div>
   <a class="hud-link" href="/docs.html" title="What is this?">? WHAT IS THIS</a>
   <div class="status">
@@ -32,6 +37,16 @@
     <span id="conn-text">connecting…</span>
   </div>
 </header>
+
+<!-- TIME MACHINE — scrub the swarm's recorded history (floating bottom-center) -->
+<section class="timemachine glass" id="timemachine">
+  <button class="tm-btn" id="tm-rewind" title="Step back">⏮</button>
+  <button class="tm-btn" id="tm-play" title="Play / pause">⏯</button>
+  <button class="tm-btn" id="tm-fwd" title="Step forward">⏭</button>
+  <input type="range" id="tm-scrub" min="0" max="1000" value="1000" step="1">
+  <span class="tm-clock" id="tm-clock">LIVE</span>
+  <button class="tm-live" id="tm-live" title="Return to live">● LIVE</button>
+</section>
 
 <!-- Control column (floating left) -->
 <section class="panel ctrl glass float-left">

@@ -35,6 +35,9 @@
   const hubs = {};        // path -> hub record
   let links = [];         // active link records
   const agentPickables = []; // meshes with userData {path,id} for raycasting
+  const hubPickables = [];   // hub spheres with userData {path,isHub} for clicks
+  let hovered = null;        // currently hover-highlighted mesh
+  let replayMode = false;    // true while the TIME MACHINE is driving colors
 
   // ── helpers ───────────────────────────────────────────────────────────
 
@@ -110,7 +113,9 @@
         color: col, emissive: col, emissiveIntensity: 1.4,
         roughness: 0.35, metalness: 0.4,
       }));
+    sphere.userData = { path: swarm.path, isHub: true };
     group.add(sphere);
+    hubPickables.push(sphere);
 
     const shell = new THREE.Mesh(
       new THREE.IcosahedronGeometry(7, 1),
@@ -170,6 +175,7 @@
   }
 
   function updateHub(rec, swarm) {
+    if (replayMode) { rec.data = swarm; return; }  // TIME MACHINE owns the colors
     const col = sevColor(swarm.severity);
     rec.sphere.material.color.setHex(col);
     rec.sphere.material.emissive.setHex(col);
@@ -184,6 +190,7 @@
     Object.values(rec.agents).forEach((m) => {
       const pi = agentPickables.indexOf(m); if (pi >= 0) agentPickables.splice(pi, 1);
     });
+    const hi = hubPickables.indexOf(rec.sphere); if (hi >= 0) hubPickables.splice(hi, 1);
     hubGroup.remove(rec.group);
     delete hubs[path];
   }
@@ -295,14 +302,32 @@
     bloom.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
   }
 
-  function handleClick(ev) {
-    if (!onAgentClick) return;
+  function _pick(ev) {
     const r = renderer.domElement.getBoundingClientRect();
     pointer.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
     pointer.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
     raycaster.setFromCamera(pointer, camera);
-    const hit = raycaster.intersectObjects(agentPickables, false)[0];
-    if (hit) onAgentClick(hit.object.userData.path, hit.object.userData.id);
+    // agents first (they orbit in front), then the hub spheres behind them
+    return raycaster.intersectObjects(agentPickables.concat(hubPickables), false)[0];
+  }
+
+  function handleClick(ev) {
+    if (!onAgentClick) return;
+    const hit = _pick(ev);
+    if (!hit) return;
+    const u = hit.object.userData;
+    // a hub click carries id=null → app.js shows the whole swarm
+    onAgentClick(u.path, u.isHub ? null : u.id);
+  }
+
+  function handleHover(ev) {
+    const hit = _pick(ev);
+    const obj = hit ? hit.object : null;
+    if (obj === hovered) return;
+    if (hovered) hovered.scale.setScalar(1.0);          // un-highlight previous
+    hovered = obj;
+    if (hovered) hovered.scale.setScalar(1.18);         // pop the hovered mesh
+    renderer.domElement.style.cursor = hovered ? 'pointer' : 'default';
   }
 
   // ── public API ────────────────────────────────────────────────────────
@@ -353,6 +378,7 @@
     raycaster = new THREE.Raycaster();
     pointer = new THREE.Vector2();
     renderer.domElement.addEventListener('click', handleClick);
+    renderer.domElement.addEventListener('pointermove', handleHover);
     window.addEventListener('resize', onResize);
 
     animate();
@@ -381,5 +407,21 @@
 
   function setDefcon(level) { defcon = level || 5; }
 
-  window.War3D = { init, update, setDefcon };
+  // ── TIME MACHINE ───────────────────────────────────────────────────────
+  // Drive hub colors from a replayed {path: severity} snapshot instead of
+  // live state. While replaying, updateHub() yields color control to us.
+  function setReplay(sevByPath) {
+    replayMode = true;
+    Object.keys(hubs).forEach((path) => {
+      const rec = hubs[path];
+      const sev = sevByPath[path] || 'OK';
+      const col = sevColor(sev);
+      rec.sphere.material.color.setHex(col);
+      rec.sphere.material.emissive.setHex(col);
+      rec.shell.material.color.setHex(col);
+    });
+  }
+  function clearReplay() { replayMode = false; }   // next live update recolors
+
+  window.War3D = { init, update, setDefcon, setReplay, clearReplay };
 })();
