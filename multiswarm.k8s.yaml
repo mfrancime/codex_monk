@@ -12,8 +12,10 @@
 #
 # For local dev (single host, no real cluster) you can just `python boot.py
 # --config multiswarm.k8s.yaml` and watch the probes run against /proc and
-# (absent) /sys/fs/cgroup/kubepods.slice. The k8s_api probe will report
-# api.healthy=0 because no service-account creds — that's correct.
+# (absent) /sys/fs/cgroup/kubepods.slice. The k8s_api probe reports
+# api.healthy=0 with no service-account creds, but its genome is auth-gated
+# (Ka1<K?∧) so "no cluster attached" stays OK/green rather than CRITICAL —
+# a sick apiserver only pages once real creds are present (see k8s_cluster.yaml).
 
 multiswarm:
   id: 7

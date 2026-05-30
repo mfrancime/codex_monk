@@ -2,8 +2,10 @@
 #
 # Runs the k8s_api probe. In production this Pod has a service account
 # (the projected token at /var/run/secrets/...) so the probe authenticates
-# automatically. For local dev with no service account, the probe reports
-# k8s.api.healthy = 0 and the genome correctly emits CRITICAL GATE_DOWN.
+# automatically (K? auth_present = 1) and a sick apiserver pages GATE_DOWN.
+# For local dev with NO service account (K? = 0) the probe can't reach any
+# apiserver — but that's "not attached to a cluster", not "the cluster is
+# down", so the genome stays OK (green) rather than crying CRITICAL.
 
 agents:
 
@@ -14,12 +16,13 @@ agents:
     config:
       probe: k8s_api
       # Rules in priority order:
-      #   Ka < 1   → CRIT GATE_DOWN  (apiserver unreachable)
-      #   Kx > 0   → CRIT CLUSTER_DEGRADED (any node NotReady)
-      #   Kd > 0   → WARN MEM_PSI_WARN (any deployment degraded — reused
-      #              code; could become a dedicated code later)
-      #   Ke > 5   → WARN MEM_PSI_WARN (warning-event spike)
-      genome: "Ka1<→CgKx0>→CdKd0>→WwKe5>→Ww"
+      #   Ka<1 ∧ K?  → CRIT GATE_DOWN  (apiserver unreachable AND we hold
+      #                creds for it — a real outage; dev w/o creds → OK)
+      #   Kx > 0     → CRIT CLUSTER_DEGRADED (any node NotReady)
+      #   Kd > 0     → WARN MEM_PSI_WARN (any deployment degraded — reused
+      #                code; could become a dedicated code later)
+      #   Ke > 5     → WARN MEM_PSI_WARN (warning-event spike)
+      genome: "Ka1<K?∧→CgKx0>→CdKd0>→WwKe5>→Ww"
       narrator_id: 9
       # k8s API is rate-sensitive — slow this down a lot vs node probes.
       calm_interval: 30
