@@ -30,7 +30,10 @@ swarms:
   # the aggregator.
   - name: k8s_node
     include: swarms/k8s_node.yaml
-    state_prefix: "swarm.k8s_node."
+    # Short prefix: the 24-byte fabric key field can't hold a long prefix
+    # plus the key (e.g. "sys.mem.availmb"). Each sub-swarm has its own
+    # fabric file, so the prefix only namespaces within that file.
+    state_prefix: "nod."
     fabric_path: "/dev/shm/codex.k8s_node.fabric"
     gateway:
       id: 9
@@ -44,7 +47,7 @@ swarms:
   # CLUSTER — control-plane probe. One per cluster, not per node.
   - name: k8s_cluster
     include: swarms/k8s_cluster.yaml
-    state_prefix: "swarm.k8s_cluster."
+    state_prefix: "clu."
     fabric_path: "/dev/shm/codex.k8s_cluster.fabric"
     gateway:
       id: 9
@@ -58,7 +61,7 @@ swarms:
   # AGGREGATOR — pure sink. Receives from node + cluster gateways.
   - name: k8s_aggregator
     include: swarms/k8s_aggregator.yaml
-    state_prefix: "swarm.k8s_aggregator."
+    state_prefix: "agg."
     fabric_path: "/dev/shm/codex.k8s_aggregator.fabric"
     gateway:
       id: 9
