@@ -260,6 +260,11 @@ _CAT = {
     'code': (0.0, 0.7, 0.7, 0.0), 'ctrl': (0.0, 0.0, 0.0, 0.0),
 }
 _VEC_LITS = ['‡2', '‡5', '‡10', '‡100', '‡1000', '‡2000', '‡4000']
+# Literal choices for the STRING mutator: small digits + the k8s-meaningful
+# thresholds. The shipped ev.mut_insert_literal draws ‡N with random N∈1..99,
+# so hitting a needed threshold (‡2 to clear a degraded=2 decoy, ‡10, ‡1000 for
+# latency) is ~1%. Drawing from this closed set makes thresholds findable.
+_LIT_CHOICES = ['0', '1', '2', '3', '5'] + _VEC_LITS
 _VEC_DIGITS = list('0123456789')
 _VEC_COMPS = ['>', '<', '≥', '≤', '≡', '≠']
 _VEC_BOOLS = ['∧', '∨', '¬']
@@ -404,17 +409,32 @@ def _mutate(genome, rng, loads, sevs, codes):
     def ins_emit(g):
         return ev._insert_at(g, '→' + rng.choice(sevs) + rng.choice(codes), rng)
 
+    def ins_lit(g):
+        return ev._insert_at(g, rng.choice(_LIT_CHOICES), rng)
+
+    def ins_rule(g):
+        # macro-mutation: insert a COMPLETE plausible rule in one step —
+        # <load><literal><comparator>→<sev><code>. A multi-rule genome (e.g.
+        # Kx→CdKd‡2>→Wd) needs a 4-token rule that only pays off when complete;
+        # single-token mutation + elitism can never assemble it, but this lands
+        # it atomically. The key to escaping deceptive 1-rule local optima.
+        rule = (rng.choice(loads) + rng.choice(_LIT_CHOICES)
+                + rng.choice(['>', '<', '≥', '≤'])
+                + '→' + rng.choice(sevs) + rng.choice(codes))
+        return ev._insert_at(g, rule, rng)
+
     ops = [
-        (ins_emit,           0.22),
-        (ins_load,           0.22),
-        (ev.mut_insert_literal, 0.12),
-        (ev.mut_insert_op,   0.15),
-        (ev.mut_delete,      0.14),
+        (ins_rule,           0.18),
+        (ins_emit,           0.16),
+        (ins_load,           0.16),
+        (ins_lit,            0.13),
+        (ev.mut_insert_op,   0.13),
+        (ev.mut_delete,      0.13),
         (ev.mut_swap_sev,    0.05),
-        (ev.mut_swap_code,   0.05),
-        (ev.mut_perturb_literal, 0.05),
+        (ev.mut_swap_code,   0.04),
+        (ev.mut_perturb_literal, 0.02),
     ]
-    local = {ins_load, ins_emit}
+    local = {ins_load, ins_emit, ins_lit, ins_rule}
     n = rng.choices([1, 2, 3], weights=[0.6, 0.3, 0.1])[0]
     g = genome
     for _ in range(n):
@@ -523,6 +543,17 @@ def run_round(front, gens, lam):
     champ, cs = evolve_front(scns, opcodes, spec['loads'], spec['sev'],
                              spec['codes'], g, lam, seed, champion)
     mastered = cs['feasible'] and cs['miss'] == 0 and cs['near'] == 0 and cs['half'] == 0
+    # Escape local optima: grinding FROM a trapped 1-rule champion is monotonic
+    # but pinned (elitism can't take the several non-improving mutations a 2nd
+    # rule needs). On a stuck grind, also run a FRESH search from empty with a
+    # bigger lambda and keep whichever champion scores better — never regresses.
+    if not mastered and attempt >= 1:
+        fchamp, fcs = evolve_front(scns, opcodes, spec['loads'], spec['sev'],
+                                   spec['codes'], g, lam * 2, seed + 50_000, '')
+        if fcs['score'] > cs['score']:
+            champ, cs = fchamp, fcs
+            mastered = (cs['feasible'] and cs['miss'] == 0
+                        and cs['near'] == 0 and cs['half'] == 0)
     # HIGHER-DIMENSIONAL (vector R^8/slot) champion — the same arms race run in
     # continuous embedding space, decoded back to a present-time genome.
     # Cross-representation gene flow: if last round the higher-D track fell
