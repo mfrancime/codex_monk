@@ -71,6 +71,24 @@ with sync_playwright() as p:
     check('rung progress pips render', len(page.query_selector_all('.evo-pip')) >= 1)
     check('lineage rows render', len(page.query_selector_all('.evo-lin')) >= 1)
 
+    # per-team stats strip
+    stats = page.query_selector_all('.evo-stats')
+    statcells = page.query_selector_all('.evo-stat')
+    print(f"    stats strips: {len(stats)} · stat cells: {len(statcells)}")
+    check('per-team stats strip renders', len(stats) >= 1)
+    check('stat cells render (ROUNDS/WIN%/BROKEN/DNA/LEN/...)', len(statcells) >= 6)
+
+    # RUN ROUND button present + wires up (click → state change to running/busy)
+    runbtn = page.query_selector('#evo-run')
+    check('RUN ROUND button present', runbtn is not None)
+    before = runbtn.inner_text()
+    page.click('#evo-run')
+    page.wait_for_timeout(1200)
+    after = page.inner_text('#evo-run')
+    print(f"    RUN ROUND: '{before}' -> '{after}'")
+    check('RUN ROUND click triggers a round (running/busy state)',
+          after != before and ('running' in after.lower() or 'busy' in after.lower()))
+
     # sub-header reflects rounds
     sub = page.inner_text('#evo-sub')
     print(f"    sub-header: {sub}")

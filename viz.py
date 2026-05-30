@@ -271,6 +271,54 @@ def _status_all() -> dict:
     return out
 
 
+# ── wargame round runner (EVOLUTION tab "RUN ROUND" button) ─────────────────
+#
+# Runs one co-evolution round on demand (wargame.py --rounds 1) so the operator
+# can advance the Kubernetes Red-vs-Blue arms race from the browser. Guarded:
+# refuses to start if a round is already in flight — either one this server
+# spawned OR the autonomous wargame_autorun.sh loop's round — so they never race
+# on the shared lineage / web/wargame.json.
+
+_WARGAME_LOCK = threading.Lock()
+_WARGAME = {'proc': None, 'started_at': None}
+
+
+def _wargame_busy() -> bool:
+    p = _WARGAME['proc']
+    if p is not None and p.poll() is None:
+        return True
+    try:
+        r = subprocess.run(['pgrep', '-f', 'wargame.py --rounds'],
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _wargame_run(rounds: int = 1, gens: int = 250, lam: int = 24) -> dict:
+    with _WARGAME_LOCK:
+        if _wargame_busy():
+            return {'ok': False, 'running': True,
+                    'error': 'a wargame round is already in flight'}
+        log_dir = os.path.join(ROOT, 'graph')
+        os.makedirs(log_dir, exist_ok=True)
+        fh = open(os.path.join(log_dir, 'wargame_ui.log'), 'ab')
+        env = os.environ.copy()
+        env.setdefault('PYTHONUNBUFFERED', '1')
+        proc = subprocess.Popen(
+            [sys.executable, '-u', os.path.join(ROOT, 'wargame.py'),
+             '--rounds', str(rounds), '--gens', str(gens), '--lam', str(lam)],
+            cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env)
+        _WARGAME['proc'] = proc
+        _WARGAME['started_at'] = time.time()
+        return {'ok': True, 'running': True, 'pid': proc.pid,
+                'rounds': rounds, 'gens': gens, 'lam': lam}
+
+
+def _wargame_status() -> dict:
+    return {'running': _wargame_busy(), 'started_at': _WARGAME['started_at']}
+
+
 # ── fabric reading ─────────────────────────────────────────────────────────
 
 def _discover_fabrics() -> list:
@@ -671,6 +719,13 @@ class VizHandler(BaseHTTPRequestHandler):
                 body.get('path', ''),
                 int(body.get('id', 0)),
                 body.get('genome', '')))
+        if path == '/api/wargame' and method == 'POST':
+            return self._json(_wargame_run(
+                int(body.get('rounds', 1)),
+                int(body.get('gens', 250)),
+                int(body.get('lam', 24))))
+        if path == '/api/wargame' and method == 'GET':
+            return self._json(_wargame_status())
 
         return self._json({'error': 'not found', 'path': path}, status=404)
 

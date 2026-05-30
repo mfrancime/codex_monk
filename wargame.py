@@ -621,6 +621,51 @@ def _rung_label(front, rung):
     return f'{front} · rung {rung + 1}/{len(FRONTS[front]["ladder"])}'
 
 
+# ── per-front "team" stats: measure the EVOLUTION, not just current fitness ──
+
+def _lev(a, b):
+    """Levenshtein edit distance between two genome strings."""
+    m, n = len(a), len(b)
+    dp = list(range(n + 1))
+    for i in range(1, m + 1):
+        prev, dp[0] = dp[0], i
+        for j in range(1, n + 1):
+            cur = dp[j]
+            dp[j] = min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] != b[j - 1]))
+            prev = cur
+    return dp[n]
+
+
+def _front_stats(hist):
+    """Team scoreboard for a front: rounds fought, convergence, how many times
+    Red broke the champion (escalations/decoys) and it recovered, total DNA
+    churn (summed edit distance — how much the genome actually evolved), and the
+    complexity arc (peak length → current, i.e. accretion then parsimony)."""
+    if not hist:
+        return {}
+    scores = [h['score'] for h in hist]
+    lens = [len(h['champion']) for h in hist]
+    genomes = [h['champion'] for h in hist]
+    churn = sum(_lev(genomes[i - 1], genomes[i]) for i in range(1, len(genomes)))
+    first_master = next((h['round'] for h in hist if h['mastered']), None)
+    breaks = sum(1 for i in range(1, len(hist))
+                 if hist[i - 1]['score'] >= -0.001 and hist[i]['score'] < -0.001)
+    mastered_rounds = sum(1 for h in hist if h['mastered'])
+    peak = max(lens)
+    return {
+        'rounds': len(hist),
+        'mastered_rounds': mastered_rounds,
+        'win_rate': round(mastered_rounds / len(hist), 2),
+        'best_score': max(scores),
+        'first_master_round': first_master,
+        'breaks_survived': breaks,
+        'dna_churn': churn,
+        'len_now': lens[-1],
+        'len_peak': peak,
+        'len_trimmed': peak - lens[-1],
+    }
+
+
 # ── regenerate the web tab data + human-readable champions ──────────────────
 
 def regen_web():
@@ -651,6 +696,7 @@ def regen_web():
             'per_vec': last.get('per_vec', []) if last else [],
             'ladder': [{'rung': i, 'attacks': [os.path.basename(p) for p in rng]}
                        for i, rng in enumerate(spec['ladder'])],
+            'stats': _front_stats(hist),
             'history': hist[-60:],
         }
     doc = {

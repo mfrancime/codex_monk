@@ -1,5 +1,5 @@
 {
-  "updated": 1780178741.480447,
+  "updated": 1780179422.8445773,
   "title": "KUBERNETES WARGAME — Red Team vs Blue genome co-evolution",
   "rounds_total": 95,
   "fronts": {
@@ -110,6 +110,18 @@
           ]
         }
       ],
+      "stats": {
+        "rounds": 19,
+        "mastered_rounds": 18,
+        "win_rate": 0.95,
+        "best_score": -0.0,
+        "first_master_round": 1,
+        "breaks_survived": 1,
+        "dna_churn": 20,
+        "len_now": 17,
+        "len_peak": 19,
+        "len_trimmed": 2
+      },
       "history": [
         {
           "round": 1,
@@ -1940,6 +1952,18 @@
           ]
         }
       ],
+      "stats": {
+        "rounds": 19,
+        "mastered_rounds": 15,
+        "win_rate": 0.79,
+        "best_score": -0.0,
+        "first_master_round": 1,
+        "breaks_survived": 1,
+        "dna_churn": 17,
+        "len_now": 12,
+        "len_peak": 12,
+        "len_trimmed": 0
+      },
       "history": [
         {
           "round": 1,
@@ -3334,6 +3358,18 @@
           ]
         }
       ],
+      "stats": {
+        "rounds": 19,
+        "mastered_rounds": 18,
+        "win_rate": 0.95,
+        "best_score": -0.0,
+        "first_master_round": 2,
+        "breaks_survived": 0,
+        "dna_churn": 7,
+        "len_now": 6,
+        "len_peak": 6,
+        "len_trimmed": 0
+      },
       "history": [
         {
           "round": 1,
@@ -4460,6 +4496,18 @@
           ]
         }
       ],
+      "stats": {
+        "rounds": 19,
+        "mastered_rounds": 17,
+        "win_rate": 0.89,
+        "best_score": -0.0,
+        "first_master_round": 1,
+        "breaks_survived": 1,
+        "dna_churn": 45,
+        "len_now": 25,
+        "len_peak": 30,
+        "len_trimmed": 5
+      },
       "history": [
         {
           "round": 1,
@@ -5889,6 +5937,18 @@
           ]
         }
       ],
+      "stats": {
+        "rounds": 19,
+        "mastered_rounds": 16,
+        "win_rate": 0.84,
+        "best_score": -0.0,
+        "first_master_round": 1,
+        "breaks_survived": 1,
+        "dna_churn": 31,
+        "len_now": 14,
+        "len_peak": 17,
+        "len_trimmed": 3
+      },
       "history": [
         {
           "round": 1,

@@ -558,6 +558,17 @@ function evoRenderFront(name, fr) {
   const feas = fr.champion_feasible;
   const scoreTxt = fr.champion_score === null || fr.champion_score === undefined
     ? '—' : Number(fr.champion_score).toFixed(0);
+  const st = fr.stats || {};
+  const stat = (label, val, title) =>
+    `<span class="evo-stat" title="${title || ''}"><span class="sv">${val}</span><span class="sl">${label}</span></span>`;
+  const statsHTML = st.rounds ? `<div class="evo-stats">
+    ${stat('ROUNDS', st.rounds, 'rounds this team has fought')}
+    ${stat('WIN%', Math.round((st.win_rate || 0) * 100), 'fraction of rounds at score 0')}
+    ${stat('BROKEN', st.breaks_survived, 'times Red broke the champion (decoy/escalation) and it re-mastered')}
+    ${stat('DNA Δ', st.dna_churn, 'total genome edit-distance across the lineage — how much it evolved')}
+    ${stat('LEN', `${st.len_now}${st.len_trimmed > 0 ? '<small>↓' + st.len_trimmed + '</small>' : ''}`, 'current genome length (↓ = chars parsimony trimmed from peak)')}
+    ${stat('→0 @r', st.first_master_round ?? '—', 'round it first reached a perfect detector')}
+  </div>` : '';
   const per = (fr.per || []).map((p) => {
     const lab = p.status === 'HIT' ? `HIT ${p.latency}t` : p.status;
     return `<span class="evo-chip ${evoStatusClass(p.status)}" title="${p.scn} · ${p.phase}">${p.scn.replace(/^k8s_/, '').replace(/\.yaml$/, '')}: ${lab}</span>`;
@@ -589,6 +600,7 @@ function evoRenderFront(name, fr) {
       <span class="evo-score">score ${scoreTxt}</span>
     </div>
     ${evoVecRow(fr)}
+    ${statsHTML}
     <div class="evo-per">${per}</div>
     <div class="evo-lineage">${hist}</div>
   </div>`;
@@ -625,8 +637,30 @@ function evoToggle(force) {
   }
 }
 
+// "RUN ROUND" — trigger one co-evolution round on the server, poll until it
+// finishes, then refresh the tab. Guarded server-side against racing the
+// autonomous loop (a busy response just polls until the in-flight round ends).
+async function evoRunRound() {
+  const btn = $('evo-run');
+  if (btn.disabled) return;
+  btn.disabled = true;
+  let r;
+  try { r = await jpost('/api/wargame', { rounds: 1 }); } catch (e) { r = { ok: false }; }
+  btn.textContent = r.ok ? '▶ running…' : (r.running ? '▶ busy…' : '▶ retry');
+  const poll = setInterval(async () => {
+    let s;
+    try { s = await jget('/api/wargame'); } catch (e) { return; }
+    if (!s.running) {
+      clearInterval(poll);
+      btn.disabled = false; btn.textContent = '▶ RUN ROUND';
+      evoRefresh();
+    }
+  }, 2000);
+}
+
 $('evo-toggle').addEventListener('click', () => evoToggle());
 $('evo-close').addEventListener('click', () => evoToggle(false));
+$('evo-run').addEventListener('click', evoRunRound);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EVO.open) evoToggle(false); });
 
 // ── SCORE — gamified uptime: climbs while all-green, streak resets on crit ─

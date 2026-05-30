@@ -602,3 +602,28 @@ body[data-defcon="1"] .klaxon {
 /* higher-dimensional (vector-space) champion row */
 .evo-champ.vec { border-left: 2px solid var(--info); padding-left: 6px; margin-left: -2px; }
 .evo-champ.vec .evo-champ-lbl { color: var(--info); cursor: help; }
+
+/* RUN ROUND button + per-team stats strip (EVOLUTION tab) */
+.evo-run {
+  background: var(--green-soft); border: 1px solid var(--green-dim); color: var(--green);
+  font: inherit; font-size: 11px; cursor: pointer; padding: 3px 10px; border-radius: 4px;
+  letter-spacing: .05em; white-space: nowrap; transition: background .15s, box-shadow .15s;
+}
+.evo-run:hover:not(:disabled) {
+  background: var(--green-dim); color: var(--bg-deep); box-shadow: 0 0 10px -2px var(--green-dim);
+}
+.evo-run:disabled { opacity: .55; cursor: default; }
+
+.evo-stats {
+  display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px;
+  padding: 7px 8px; border: 1px solid var(--grid); border-radius: 6px;
+  background: var(--bg-deep);
+}
+.evo-stat {
+  display: flex; flex-direction: column; align-items: center; min-width: 46px;
+  padding: 0 6px; cursor: help;
+}
+.evo-stat + .evo-stat { border-left: 1px solid var(--grid); }
+.evo-stat .sv { font-family: var(--mono); font-size: 15px; color: var(--green); line-height: 1.1; }
+.evo-stat .sv small { font-size: 10px; color: var(--amber); }
+.evo-stat .sl { font-size: 8px; color: var(--text-dim); letter-spacing: .06em; margin-top: 2px; }
