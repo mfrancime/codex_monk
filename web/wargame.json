@@ -1,7 +1,7 @@
 {
-  "updated": 1780157525.0231519,
+  "updated": 1780159339.7908993,
   "title": "KUBERNETES WARGAME — Red Team vs Blue genome co-evolution",
-  "rounds_total": 25,
+  "rounds_total": 30,
   "fronts": {
     "pods": {
       "domain": "cgroup_pods",
@@ -426,6 +426,95 @@
               "latency": 0
             }
           ]
+        },
+        {
+          "round": 6,
+          "ts": 1780158618.7187123,
+          "front": "pods",
+          "domain": "cgroup_pods",
+          "rung": 3,
+          "rungs_total": 4,
+          "attempt": 1,
+          "label": "pods · rung 4/4",
+          "attacks": [
+            "k8s_pod_creep.yaml",
+            "k8s_pod_noisy_decoy.yaml",
+            "k8s_pod_oom.yaml",
+            "k8s_pod_multi.yaml"
+          ],
+          "champion": "ΠpΠo→Cp→Wp",
+          "genome_len": 10,
+          "score": -0.0,
+          "feasible": true,
+          "fp": 0,
+          "miss": 0,
+          "near": 0,
+          "half": 0,
+          "latency_sum": 0,
+          "hits": [
+            {
+              "scn": "k8s_pod_creep",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_oom",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_multi",
+              "latency": 0
+            }
+          ],
+          "per": [
+            {
+              "scn": "k8s_pod_creep",
+              "phase": "pressure",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_oom",
+              "phase": "oom_storm",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_multi",
+              "phase": "broad_squeeze",
+              "status": "HIT",
+              "latency": 0
+            }
+          ],
+          "mastered": true,
+          "gens": 550,
+          "lam": 40,
+          "seed": 30104,
+          "delta_score": 0.0,
+          "champion_vec": "ΠpΠo→Cp→Wp",
+          "score_vec": -0.0,
+          "feasible_vec": true,
+          "vec_mastered": true,
+          "vec_dim": 64,
+          "per_vec": [
+            {
+              "scn": "k8s_pod_creep",
+              "phase": "pressure",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_oom",
+              "phase": "oom_storm",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_pod_multi",
+              "phase": "broad_squeeze",
+              "status": "HIT",
+              "latency": 0
+            }
+          ]
         }
       ]
     },
@@ -434,16 +523,16 @@
       "flavor": "🖥️ NODES — kubelets going dark",
       "rungs_total": 3,
       "current_rung": 1,
-      "mastered_rung": 0,
-      "champion": "Kd→Cx",
-      "champion_score": -250.0,
+      "mastered_rung": 1,
+      "champion": "KdKe8≥→Cx→Wx",
+      "champion_score": -0.0,
       "champion_feasible": true,
       "per": [
         {
           "scn": "k8s_node_notready",
           "phase": "node_lost",
-          "status": "HALF",
-          "detail": "CRITICAL:NODE_NOT_READY"
+          "status": "HIT",
+          "latency": 0
         },
         {
           "scn": "k8s_node_cascade",
@@ -815,6 +904,77 @@
               "detail": "WARN:NODE_NOT_READY"
             }
           ]
+        },
+        {
+          "round": 6,
+          "ts": 1780158756.7644715,
+          "front": "nodes",
+          "domain": "k8s_api",
+          "rung": 1,
+          "rungs_total": 3,
+          "attempt": 4,
+          "label": "nodes · rung 2/3",
+          "attacks": [
+            "k8s_node_notready.yaml",
+            "k8s_node_cascade.yaml"
+          ],
+          "champion": "KdKe8≥→Cx→Wx",
+          "genome_len": 12,
+          "score": -0.0,
+          "feasible": true,
+          "fp": 0,
+          "miss": 0,
+          "near": 0,
+          "half": 0,
+          "latency_sum": 0,
+          "hits": [
+            {
+              "scn": "k8s_node_notready",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_node_cascade",
+              "latency": 0
+            }
+          ],
+          "per": [
+            {
+              "scn": "k8s_node_notready",
+              "phase": "node_lost",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_node_cascade",
+              "phase": "majority_down",
+              "status": "HIT",
+              "latency": 0
+            }
+          ],
+          "mastered": true,
+          "gens": 1150,
+          "lam": 40,
+          "seed": 10395,
+          "delta_score": 250.0,
+          "champion_vec": "Kx→Wx",
+          "score_vec": -250.0,
+          "feasible_vec": true,
+          "vec_mastered": false,
+          "vec_dim": 32,
+          "per_vec": [
+            {
+              "scn": "k8s_node_notready",
+              "phase": "node_lost",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_node_cascade",
+              "phase": "majority_down",
+              "status": "HALF",
+              "detail": "WARN:NODE_NOT_READY"
+            }
+          ]
         }
       ]
     },
@@ -1130,6 +1290,61 @@
               "latency": 0
             }
           ]
+        },
+        {
+          "round": 6,
+          "ts": 1780158910.2483492,
+          "front": "apiserver",
+          "domain": "k8s_api",
+          "rung": 1,
+          "rungs_total": 2,
+          "attempt": 3,
+          "label": "apiserver · rung 2/2",
+          "attacks": [
+            "k8s_api_down.yaml",
+            "k8s_api_warnstorm_decoy.yaml"
+          ],
+          "champion": "Kn≥→Cg",
+          "genome_len": 6,
+          "score": -0.0,
+          "feasible": true,
+          "fp": 0,
+          "miss": 0,
+          "near": 0,
+          "half": 0,
+          "latency_sum": 0,
+          "hits": [
+            {
+              "scn": "k8s_api_down",
+              "latency": 0
+            }
+          ],
+          "per": [
+            {
+              "scn": "k8s_api_down",
+              "phase": "apiserver_down",
+              "status": "HIT",
+              "latency": 0
+            }
+          ],
+          "mastered": true,
+          "gens": 950,
+          "lam": 40,
+          "seed": 10298,
+          "delta_score": 0.0,
+          "champion_vec": "Kn≥→Cg",
+          "score_vec": -0.0,
+          "feasible_vec": true,
+          "vec_mastered": true,
+          "vec_dim": 40,
+          "per_vec": [
+            {
+              "scn": "k8s_api_down",
+              "phase": "apiserver_down",
+              "status": "HIT",
+              "latency": 0
+            }
+          ]
         }
       ]
     },
@@ -1156,16 +1371,16 @@
           "latency": 0
         }
       ],
-      "champion_vec": "KxKd→Cgo‡2000;24",
-      "score_vec": -250.0,
+      "champion_vec": "KdKx→Cg→Wg",
+      "score_vec": -0.0,
       "feasible_vec": true,
-      "vec_dim": 104,
+      "vec_dim": 64,
       "per_vec": [
         {
           "scn": "k8s_etcd_wobble",
           "phase": "etcd_laggy",
-          "status": "HALF",
-          "detail": "CRITICAL:GATE_DOWN"
+          "status": "HIT",
+          "latency": 0
         },
         {
           "scn": "k8s_etcd_splitbrain",
@@ -1530,6 +1745,78 @@
               "latency": 0
             }
           ]
+        },
+        {
+          "round": 6,
+          "ts": 1780159110.8555014,
+          "front": "etcd",
+          "domain": "k8s_api",
+          "rung": 2,
+          "rungs_total": 3,
+          "attempt": 3,
+          "label": "etcd · rung 3/3",
+          "attacks": [
+            "k8s_etcd_wobble.yaml",
+            "k8s_etcd_splitbrain.yaml",
+            "k8s_etcd_compaction_decoy.yaml"
+          ],
+          "champion": "KdKx→Cg→Wg",
+          "genome_len": 10,
+          "score": -0.0,
+          "feasible": true,
+          "fp": 0,
+          "miss": 0,
+          "near": 0,
+          "half": 0,
+          "latency_sum": 0,
+          "hits": [
+            {
+              "scn": "k8s_etcd_wobble",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_etcd_splitbrain",
+              "latency": 0
+            }
+          ],
+          "per": [
+            {
+              "scn": "k8s_etcd_wobble",
+              "phase": "etcd_laggy",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_etcd_splitbrain",
+              "phase": "quorum_lost",
+              "status": "HIT",
+              "latency": 0
+            }
+          ],
+          "mastered": true,
+          "gens": 950,
+          "lam": 40,
+          "seed": 20298,
+          "delta_score": 0.0,
+          "champion_vec": "KdKx→Cg→Wg",
+          "score_vec": -0.0,
+          "feasible_vec": true,
+          "vec_mastered": true,
+          "vec_dim": 64,
+          "per_vec": [
+            {
+              "scn": "k8s_etcd_wobble",
+              "phase": "etcd_laggy",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_etcd_splitbrain",
+              "phase": "quorum_lost",
+              "status": "HIT",
+              "latency": 0
+            }
+          ]
         }
       ]
     },
@@ -1538,16 +1825,16 @@
       "flavor": "📋 SCHEDULER — pods stuck Pending",
       "rungs_total": 3,
       "current_rung": 2,
-      "mastered_rung": 1,
-      "champion": "Kx→Cd",
-      "champion_score": -1000.0,
+      "mastered_rung": 2,
+      "champion": "Kx→CdKd5≥→Wd",
+      "champion_score": -0.0,
       "champion_feasible": true,
       "per": [
         {
           "scn": "k8s_sched_pileup",
           "phase": "pods_pending",
-          "status": "MISS",
-          "want": "WARN:CLUSTER_DEGRADED"
+          "status": "HIT",
+          "latency": 0
         },
         {
           "scn": "k8s_sched_storm",
@@ -1907,6 +2194,78 @@
           "lam": 40,
           "seed": 20201,
           "delta_score": 0.0,
+          "champion_vec": "Kd3<∨≥Kx≠→CdKdW",
+          "score_vec": -250.0,
+          "feasible_vec": true,
+          "vec_mastered": false,
+          "vec_dim": 96,
+          "per_vec": [
+            {
+              "scn": "k8s_sched_pileup",
+              "phase": "pods_pending",
+              "status": "HALF",
+              "detail": "CRITICAL:CLUSTER_DEGRADED"
+            },
+            {
+              "scn": "k8s_sched_storm",
+              "phase": "mass_unschedulable",
+              "status": "HIT",
+              "latency": 0
+            }
+          ]
+        },
+        {
+          "round": 6,
+          "ts": 1780159339.789508,
+          "front": "scheduler",
+          "domain": "k8s_api",
+          "rung": 2,
+          "rungs_total": 3,
+          "attempt": 3,
+          "label": "scheduler · rung 3/3",
+          "attacks": [
+            "k8s_sched_pileup.yaml",
+            "k8s_sched_storm.yaml",
+            "k8s_sched_rollout_decoy.yaml"
+          ],
+          "champion": "Kx→CdKd5≥→Wd",
+          "genome_len": 12,
+          "score": -0.0,
+          "feasible": true,
+          "fp": 0,
+          "miss": 0,
+          "near": 0,
+          "half": 0,
+          "latency_sum": 0,
+          "hits": [
+            {
+              "scn": "k8s_sched_pileup",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_sched_storm",
+              "latency": 0
+            }
+          ],
+          "per": [
+            {
+              "scn": "k8s_sched_pileup",
+              "phase": "pods_pending",
+              "status": "HIT",
+              "latency": 0
+            },
+            {
+              "scn": "k8s_sched_storm",
+              "phase": "mass_unschedulable",
+              "status": "HIT",
+              "latency": 0
+            }
+          ],
+          "mastered": true,
+          "gens": 950,
+          "lam": 40,
+          "seed": 20298,
+          "delta_score": 1000.0,
           "champion_vec": "Kd3<∨≥Kx≠→CdKdW",
           "score_vec": -250.0,
           "feasible_vec": true,
