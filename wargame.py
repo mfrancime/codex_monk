@@ -561,8 +561,12 @@ def run_round(front, gens, lam):
         s['domain'] = domain
         s.setdefault('name', os.path.basename(p))
     seed = rung * 10_000 + attempt * 97 + 7
-    # more attempts on a stuck rung → search harder
-    g = gens + attempt * 200
+    # Budget: a genuinely-stuck CLIMBING rung searches harder each attempt; but a
+    # front that already mastered the WHOLE ladder only needs a light parsimony
+    # pass (hunt shorter equal-score genomes) — don't burn ever-growing compute
+    # re-searching a solved problem, which was stretching steady-state ticks.
+    at_max_mastered = (last is not None and last['mastered'] and rung == max_rung)
+    g = max(120, gens // 2) if at_max_mastered else gens + attempt * 200
 
     # DISCRETE (1-D) champion
     champ, cs = evolve_front(scns, opcodes, spec['loads'], spec['sev'],
