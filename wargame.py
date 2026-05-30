@@ -97,6 +97,11 @@ FRONTS = {
              'scenarios/k8s_pod_oom.yaml'],
             ['scenarios/k8s_pod_creep.yaml', 'scenarios/k8s_pod_noisy_decoy.yaml',
              'scenarios/k8s_pod_oom.yaml', 'scenarios/k8s_pod_multi.yaml'],
+            # Red escalation: a slow memory leak (high mem_pct, low PSI, no OOM)
+            # that the OOM/pressure champion is blind to → forces a Πm rule.
+            ['scenarios/k8s_pod_creep.yaml', 'scenarios/k8s_pod_noisy_decoy.yaml',
+             'scenarios/k8s_pod_oom.yaml', 'scenarios/k8s_pod_multi.yaml',
+             'scenarios/k8s_pod_leak.yaml'],
         ],
     },
     'nodes': {
@@ -108,6 +113,11 @@ FRONTS = {
             ['scenarios/k8s_node_notready.yaml', 'scenarios/k8s_node_cascade.yaml'],
             ['scenarios/k8s_node_notready.yaml', 'scenarios/k8s_node_cascade.yaml',
              'scenarios/k8s_node_cordon_decoy.yaml'],
+            # Red escalation: deployments degraded but every node Ready punishes
+            # the degraded cheat (Kd2>→Cx) → forces gating on not_ready (Kx).
+            ['scenarios/k8s_node_notready.yaml', 'scenarios/k8s_node_cascade.yaml',
+             'scenarios/k8s_node_cordon_decoy.yaml',
+             'scenarios/k8s_node_deploy_degraded_decoy.yaml'],
         ],
     },
     'apiserver': {
@@ -274,7 +284,7 @@ _CAT = {
     'emit': (0.7, 0.0, 0.0, 0.0), 'sev': (0.7, 0.7, 0.0, 0.0),
     'code': (0.0, 0.7, 0.7, 0.0), 'ctrl': (0.0, 0.0, 0.0, 0.0),
 }
-_VEC_LITS = ['‡2', '‡5', '‡10', '‡100', '‡1000', '‡2000', '‡4000']
+_VEC_LITS = ['‡2', '‡5', '‡10', '‡85', '‡100', '‡1000', '‡2000', '‡4000']
 # Literal choices for the STRING mutator: small digits + the k8s-meaningful
 # thresholds. The shipped ev.mut_insert_literal draws ‡N with random N∈1..99,
 # so hitting a needed threshold (‡2 to clear a degraded=2 decoy, ‡10, ‡1000 for
