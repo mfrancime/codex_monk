@@ -14,11 +14,8 @@
 const POLL_MS = 1500;
 const LOG_POLL_MS = 1500;
 const ALERT_POLL_MS = 2500;
-const PULSE_BUDGET = 6;   // max simultaneous pulses on the topology
 
 const $ = (id) => document.getElementById(id);
-const SEV_TO_DEFCON = { OK: 5, INFO: 4, WARN: 3, CRITICAL: 1 };
-const SEV_TO_CLASS = { OK: 'ok', INFO: 'ok', WARN: 'warn', CRITICAL: 'crit' };
 
 let STATE = {
   swarms: [],
@@ -27,7 +24,6 @@ let STATE = {
   configs: [],
   probes: [],
   defcon: 5,
-  lastLogSeq: {},   // fabric path → highest seq seen (drives pulse animation)
   selected: null,   // {path, id}
 };
 
@@ -138,166 +134,87 @@ document.body.addEventListener('click', async (e) => {
   }
 });
 
-// ── topology (SVG) ───────────────────────────────────────────────────────
+// ── topology (3D WebGL — see scene3d.js) ─────────────────────────────────
+//
+// The center is now a full-screen Three.js scene. app.js just feeds it the
+// polled state; all rendering/animation lives in window.War3D.
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+let _war3dStarted = false;
 
-function el(tag, attrs = {}, children = []) {
-  const n = document.createElementNS(SVG_NS, tag);
-  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
-  for (const c of children) n.appendChild(c);
-  return n;
+function ensureWar3D() {
+  if (_war3dStarted || !window.War3D) return;
+  const canvas = $('war-canvas');
+  if (!canvas) return;
+  _war3dStarted = true;   // set first so a WebGL failure can't retry-loop
+  try {
+    window.War3D.init(canvas, { onAgentClick: openDrawer });
+  } catch (e) {
+    // No/blocked WebGL — degrade gracefully instead of hanging the UI.
+    console.error('War3D init failed:', e);
+    const hint = $('topo-meta');
+    if (hint) hint.textContent = 'WebGL unavailable — 3D scene disabled';
+    window.War3D = null;
+  }
 }
 
 function renderTopology() {
-  const svg = $('topo-svg');
-  svg.innerHTML = '';
-  const W = 1000, H = 600;
-
-  const swarms = STATE.swarms;
-  if (!swarms.length) {
-    svg.appendChild(el('text', {
-      x: W / 2, y: H / 2, class: 'topo-node-label',
-    }, [document.createTextNode('NO FABRICS ONLINE')]));
-    return;
+  ensureWar3D();
+  if (window.War3D && _war3dStarted) {
+    window.War3D.setDefcon(STATE.defcon);
+    window.War3D.update(STATE);
   }
-
-  // Layout: arrange swarm hubs along the horizontal midline.
-  const posByPath = {};
-  const positions = swarms.map((s, i) => {
-    const slots = swarms.length;
-    const x = (W / (slots + 1)) * (i + 1);
-    const y = H / 2;
-    posByPath[s.path] = { x, y };
-    return { swarm: s, x, y };
-  });
-
-  // Real VJR topology: one line per gateway peer link (from /api/links,
-  // derived from each gateway's configured peers). Active links (both ends
-  // online) render solid; configured-but-down links render dimmed.
-  STATE.links.forEach((lk) => {
-    const a = posByPath[lk.from], b = posByPath[lk.to];
-    if (!a || !b) return;
-    const line = el('line', {
-      x1: a.x, y1: a.y, x2: b.x, y2: b.y,
-      class: 'topo-vjr-link' + (lk.online ? ' online' : ' down'),
-    });
-    svg.appendChild(line);
-    // peer label at the midpoint
-    if (lk.peer) {
-      svg.appendChild(el('text', {
-        x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 - 6,
-        class: 'topo-link-label',
-      }, [document.createTextNode('VJR')]));
-    }
-  });
-
-  positions.forEach(({ swarm, x, y }) => {
-    drawFabric(svg, swarm, x, y);
-  });
-
-  $('topo-meta').textContent =
-    `${swarms.length} fabric${swarms.length === 1 ? '' : 's'} · ` +
-    `${swarms.filter((s) => s.online).length} online`;
+  const swarms = STATE.swarms;
+  const online = swarms.filter((s) => s.online).length;
+  $('topo-meta').textContent = swarms.length
+    ? `${swarms.length} fabric${swarms.length === 1 ? '' : 's'} · ${online} online`
+    : 'no fabrics online';
 }
 
-function drawFabric(svg, swarm, cx, cy) {
-  const sevClass = SEV_TO_CLASS[swarm.severity] || 'ok';
-  const hubR = 60;
-  // Hub
-  svg.appendChild(el('circle', {
-    cx, cy, r: hubR,
-    class: 'topo-node-fabric ' + (swarm.online ? 'online' : '') +
-           ' ' + (sevClass === 'ok' ? '' : sevClass),
-  }));
-
-  // Crosshair grid lines inside hub
-  svg.appendChild(el('line', {
-    x1: cx - hubR, y1: cy, x2: cx + hubR, y2: cy,
-    stroke: '#1a4022', 'stroke-width': 1,
-  }));
-  svg.appendChild(el('line', {
-    x1: cx, y1: cy - hubR, x2: cx, y2: cy + hubR,
-    stroke: '#1a4022', 'stroke-width': 1,
-  }));
-
-  // Hub label
-  const short = swarm.path.split('/').pop()
-    .replace('codex.', '').replace('.fabric', '');
-  svg.appendChild(el('text', {
-    x: cx, y: cy - 5, class: 'topo-node-label',
-  }, [document.createTextNode(short.toUpperCase())]));
-  svg.appendChild(el('text', {
-    x: cx, y: cy + 10, class: 'topo-node-meta',
-  }, [document.createTextNode(swarm.severity)]));
-  svg.appendChild(el('text', {
-    x: cx, y: cy + 22, class: 'topo-node-meta',
-  }, [document.createTextNode(
-    swarm.agents.length + ' agents')]));
-
-  // Agents arranged around the hub
-  const agentR = 110;
-  swarm.agents.forEach((a, i) => {
-    const angle = (i / swarm.agents.length) * 2 * Math.PI - Math.PI / 2;
-    const ax = cx + agentR * Math.cos(angle);
-    const ay = cy + agentR * Math.sin(angle);
-    const isGateway = a.role === 'gateway';
-    const sev = a.sev;   // this agent's OWN severity, by writer attribution
-    const cls = ['topo-agent'];
-    if (isGateway) cls.push('gateway');
-    if (a.state === 'zombie') cls.push('crit');
-    if (sev === 'CRITICAL') cls.push('crit');
-    else if (sev === 'WARN') cls.push('warn');
-    // Link from hub to agent
-    svg.appendChild(el('line', {
-      x1: cx, y1: cy, x2: ax, y2: ay, class: 'topo-link',
-    }));
-    svg.appendChild(el('circle', {
-      cx: ax, cy: ay, r: 14, class: cls.join(' '),
-      'data-path': swarm.path, 'data-id': a.id,
-    }));
-    svg.appendChild(el('text', {
-      x: ax, y: ay + 3, class: 'topo-agent-label',
-    }, [document.createTextNode('#' + a.id)]));
-  });
-}
-
-// click an agent dot to open drawer
-$('topo-svg').addEventListener('click', (e) => {
-  const c = e.target.closest('[data-path]');
-  if (!c) return;
-  openDrawer(c.dataset.path, parseInt(c.dataset.id, 10));
-});
+// (agent clicks in 3D are handled by War3D's raycaster → openDrawer)
 
 // ── agent grid table ─────────────────────────────────────────────────────
 
+// Reconcile rows in place (keyed by path+id) rather than rebuilding the
+// whole <tbody> each poll — keeps rows clickable and preserves scroll while
+// the heartbeat age ticks every second.
+const _gridRows = new Map();   // key -> <tr>
+
 function renderAgentGrid() {
   const tbody = $('agent-tbody');
-  tbody.innerHTML = '';
   let total = 0;
+  const seen = new Set();
   STATE.swarms.forEach((s) => {
     if (!s.online) return;
     const short = s.swarm_name || s.path.split('/').pop()
       .replace('codex.', '').replace('.fabric', '');
     s.agents.forEach((a) => {
       total++;
-      const tr = document.createElement('tr');
-      tr.dataset.path = s.path;
-      tr.dataset.id = a.id;
-      const agentSev = a.sev || '—';
-      const agentCode = a.code || '—';
-      tr.innerHTML = `
-        <td>${short}</td>
-        <td>#${a.id}</td>
-        <td class="cell-role">${a.role || '—'}</td>
-        <td class="cell-state-${a.state}">${a.state}</td>
-        <td>${a.heartbeat_age_s ?? '—'}s</td>
-        <td class="cell-sev-${agentSev}">${agentSev}</td>
-        <td>${agentCode}</td>
-      `;
-      tr.addEventListener('click', () => openDrawer(s.path, a.id));
-      tbody.appendChild(tr);
+      const key = s.path + '#' + a.id;
+      seen.add(key);
+      const sev = a.sev || '—';
+      let tr = _gridRows.get(key);
+      if (!tr) {
+        tr = document.createElement('tr');
+        tr.dataset.path = s.path;
+        tr.dataset.id = a.id;
+        tr.addEventListener('click', () => openDrawer(s.path, a.id));
+        for (let i = 0; i < 7; i++) tr.appendChild(document.createElement('td'));
+        _gridRows.set(key, tr);
+        tbody.appendChild(tr);
+      }
+      const td = tr.children;
+      td[0].textContent = short;
+      td[1].textContent = '#' + a.id;
+      td[2].textContent = a.role || '—'; td[2].className = 'cell-role';
+      td[3].textContent = a.state;       td[3].className = 'cell-state-' + a.state;
+      td[4].textContent = (a.heartbeat_age_s ?? '—') + 's';
+      td[5].textContent = sev;           td[5].className = 'cell-sev-' + sev;
+      td[6].textContent = a.code || '—';
     });
+  });
+  // drop rows for agents that disappeared
+  _gridRows.forEach((tr, key) => {
+    if (!seen.has(key)) { tr.remove(); _gridRows.delete(key); }
   });
   $('agent-meta').textContent = total;
 }
@@ -330,13 +247,6 @@ async function refreshLog() {
     `;
     wrap.appendChild(div);
   });
-  // ── pulse topology for new entries since last poll ───────────────────
-  const lastSeen = STATE.lastLogSeq[fabric] || 0;
-  const newOnes = data.entries.filter((r) => r.seq > lastSeen);
-  if (data.entries.length) {
-    STATE.lastLogSeq[fabric] = data.entries[data.entries.length - 1].seq;
-  }
-  schedulePulses(fabric, newOnes);
 }
 
 $('log-fabric').addEventListener('change', refreshLog);
@@ -361,54 +271,6 @@ async function refreshAlerts() {
     wrap.appendChild(div);
   });
   $('alert-meta').textContent = data.entries.length;
-}
-
-// ── pulse animation on new log entries ───────────────────────────────────
-
-let _activePulses = 0;
-function schedulePulses(fabricPath, entries) {
-  // find the SVG center for this fabric
-  const swarmIdx = STATE.swarms.findIndex((s) => s.path === fabricPath);
-  if (swarmIdx < 0) return;
-  const svg = $('topo-svg');
-  const W = 1000, H = 600;
-  const slots = STATE.swarms.length;
-  const cx = (W / (slots + 1)) * (swarmIdx + 1);
-  const cy = H / 2;
-  const agentR = 110;
-  const agents = STATE.swarms[swarmIdx].agents;
-
-  for (const row of entries) {
-    if (_activePulses >= PULSE_BUDGET) break;
-    const verb = row.verb_name;
-    let cls = 'topo-pulse';
-    if (verb === 'ERROR') cls += ' crit';
-    else if (verb === 'MSG' || verb === 'SIG') cls += ' warn';
-    // pulse direction: from a random agent to the hub center
-    const i = Math.floor(Math.random() * Math.max(1, agents.length));
-    const angle = (i / Math.max(1, agents.length)) * 2 * Math.PI - Math.PI / 2;
-    const ax = cx + agentR * Math.cos(angle);
-    const ay = cy + agentR * Math.sin(angle);
-    const dot = el('circle', { cx: ax, cy: ay, r: 4, class: cls });
-    svg.appendChild(dot);
-    _activePulses++;
-    const anim = el('animate', {
-      attributeName: 'cx', from: ax, to: cx, dur: '0.8s',
-      fill: 'freeze', begin: '0s',
-    });
-    const anim2 = el('animate', {
-      attributeName: 'cy', from: ay, to: cy, dur: '0.8s',
-      fill: 'freeze', begin: '0s',
-    });
-    const anim3 = el('animate', {
-      attributeName: 'opacity', from: 1, to: 0, dur: '0.8s',
-      fill: 'freeze', begin: '0s',
-    });
-    dot.appendChild(anim);
-    dot.appendChild(anim2);
-    dot.appendChild(anim3);
-    setTimeout(() => { dot.remove(); _activePulses--; }, 900);
-  }
 }
 
 // ── drawer (agent detail / propose / frame inspect) ──────────────────────
