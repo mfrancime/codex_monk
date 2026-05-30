@@ -627,3 +627,13 @@ body[data-defcon="1"] .klaxon {
 .evo-stat .sv { font-family: var(--mono); font-size: 15px; color: var(--green); line-height: 1.1; }
 .evo-stat .sv small { font-size: 10px; color: var(--amber); }
 .evo-stat .sl { font-size: 8px; color: var(--text-dim); letter-spacing: .06em; margin-top: 2px; }
+
+/* RED / BLUE team framing on each front card */
+.evo-teamline { display: flex; align-items: center; gap: 8px; margin: 9px 0 3px; }
+.evo-team { font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; white-space: nowrap; }
+.evo-team.red  { color: var(--red-glow); background: #3a0e0e; border: 1px solid #5a1a1a; }
+.evo-team.blue { color: var(--info);     background: #0e2236; border: 1px solid #1a3a5a; }
+.evo-teamdesc { font-size: 10px; color: var(--text-dim); }
+.evo-teamline.red  { border-left: 2px solid var(--red); padding-left: 6px; margin-left: -2px; }
+.evo-teamline.blue { border-left: 2px solid var(--info); padding-left: 6px; margin-left: -2px; }
+.evo-hold b { color: var(--info); }

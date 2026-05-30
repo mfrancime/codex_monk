@@ -573,6 +573,11 @@ function evoRenderFront(name, fr) {
     const lab = p.status === 'HIT' ? `HIT ${p.latency}t` : p.status;
     return `<span class="evo-chip ${evoStatusClass(p.status)}" title="${p.scn} · ${p.phase}">${p.scn.replace(/^k8s_/, '').replace(/\.yaml$/, '')}: ${lab}</span>`;
   }).join('');
+  // RED team's arsenal at the current rung (the attacks Blue must defend)
+  const curRung = (fr.ladder || [])[fr.current_rung];
+  const redAttacks = ((curRung && curRung.attacks) || [])
+    .map((a) => a.replace(/^k8s_/, '').replace(/\.yaml$/, '').replace(/_decoy$/, ' (decoy)'))
+    .join(' · ') || '—';
   const hist = (fr.history || []).slice(-10).reverse().map((r) => {
     const tag = r.mastered ? '✔ MASTERED' : `grind#${r.attempt}`;
     return `<div class="evo-lin ${r.mastered ? 'won' : ''}">
@@ -593,15 +598,20 @@ function evoRenderFront(name, fr) {
       <span class="evo-rungs-lbl">RUNG ${cur}/${total} · MASTERED ${mastered}/${total}</span>
       <span class="evo-pips">${pips}</span>
     </div>
+    <div class="evo-teamline red"><span class="evo-team red">🔴 RED TEAM</span>
+      <span class="evo-teamdesc">attacks · rung ${cur}/${total}: ${redAttacks}</span></div>
+    <div class="evo-per">${per}</div>
+
+    <div class="evo-teamline blue"><span class="evo-team blue">🔵 BLUE TEAM</span>
+      <span class="evo-teamdesc">evolved detector genome (its live DNA)</span></div>
     <div class="evo-champ">
       <span class="evo-champ-lbl">1-D</span>
       <code class="evo-gene">${evoGenomeHTML(fr.champion)}</code>
-      <span class="evo-badge ${feas ? 'ok' : 'bad'}">${feas ? 'FEASIBLE' : 'INFEASIBLE'}</span>
+      <span class="evo-badge ${feas ? 'ok' : 'bad'}">${feas ? 'HOLDING' : 'BREACHED'}</span>
       <span class="evo-score">score ${scoreTxt}</span>
     </div>
     ${evoVecRow(fr)}
     ${statsHTML}
-    <div class="evo-per">${per}</div>
     <div class="evo-lineage">${hist}</div>
   </div>`;
 }
@@ -616,8 +626,12 @@ async function evoRefresh() {
   }
   EVO.last = doc;
   const fronts = doc.fronts || {};
-  $('evo-sub').textContent =
-    `${doc.rounds_total || 0} rounds · ${Object.keys(fronts).length} fronts · ` +
+  const fnames = Object.keys(fronts);
+  const holding = fnames.filter(
+    (n) => fronts[n].champion_feasible && (fronts[n].champion_score ?? -1) >= -0.001).length;
+  $('evo-sub').innerHTML =
+    `<span class="evo-hold">🔵 Blue holding <b>${holding}/${fnames.length}</b> fronts</span> · ` +
+    `${doc.rounds_total || 0} rounds · ${fnames.length} fronts · ` +
     `updated ${new Date((doc.updated || 0) * 1000).toLocaleTimeString()}`;
   const order = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
   const names = Object.keys(fronts).sort(
@@ -652,8 +666,9 @@ async function evoRunRound() {
     try { s = await jget('/api/wargame'); } catch (e) { return; }
     if (!s.running) {
       clearInterval(poll);
-      btn.disabled = false; btn.textContent = '▶ RUN ROUND';
+      btn.textContent = '✓ round done';
       evoRefresh();
+      setTimeout(() => { btn.disabled = false; btn.textContent = '▶ RUN ROUND'; }, 1800);
     }
   }, 2000);
 }

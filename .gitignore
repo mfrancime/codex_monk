@@ -31,3 +31,6 @@ __pycache__/
 /dist/
 *.egg-info/
 .venv-pw/
+
+# deployed-champion exhibit transient telemetry
+/tmp/codex_k8s_telemetry/

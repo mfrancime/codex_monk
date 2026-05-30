@@ -1,0 +1,58 @@
+# k8s_deployed.yaml — the wargame's evolved CHAMPIONS, deployed as live DNA.
+#
+# This closes the loop: the genomes the co-evolution wargame discovered
+# (wargame.py / the ⧬ WARGAME tab) are loaded here as the operating DNA of live
+# probe agents. Each agent reads its genome from the fabric every tick and runs
+# it — so the evolved "weights" become the swarm's behavior, hot-swappable at
+# runtime. No new code: every agent is the one DeclarativeAgent class; behavior
+# is the genome string + the probe it's pointed at (design law honored).
+#
+# The five Blue defenders each watch one Kubernetes front against synthetic
+# telemetry (drive it with deploy_telemetry.py / deploy_champions.sh):
+#   id 2  pods       cgroup_pods  — OOMKills / memory pressure / slow leak
+#   id 3  nodes      k8s_api      — kubelet NotReady
+#   id 4  apiserver  k8s_api      — control-plane down
+#   id 5  etcd       k8s_api      — apiserver/etcd latency
+#   id 6  scheduler  k8s_api      — pods unschedulable (degraded deployments)
+#
+# Launch:  ./deploy_champions.sh           (healthy cluster — all green)
+# Attack:  python deploy_telemetry.py pods (inject live — watch id 2 light up)
+
+swarm:
+  id: 7
+  name: "k8s-deployed-champions"
+  region: "synthetic-cluster"
+  description: "Wargame champion genomes running as live agent DNA"
+
+fabric_path: "/dev/shm/codex.k8s_deployed.fabric"
+
+agents:
+  # Blue audit sink — collects every defender's alert.
+  - type: declarative
+    id: 1
+    priority: 2
+    config:
+      consume_types: [700]
+      persist_path: graph/k8s_deployed_alerts.jsonl
+
+  # ── Blue Team: five evolved champions, one per Kubernetes front ──────────
+  - type: declarative
+    id: 2
+    priority: 1
+    config: { probe: cgroup_pods, genome: "Πm‡83≥Πp∨Πo→Cp→Wp", narrator_id: 1, calm_interval: 5, alert_interval: 1 }
+  - type: declarative
+    id: 3
+    priority: 1
+    config: { probe: k8s_api, genome: "Kx1>→CxKx→Wx", narrator_id: 1, calm_interval: 5, alert_interval: 1 }
+  - type: declarative
+    id: 4
+    priority: 1
+    config: { probe: k8s_api, genome: "Ka≥→Cg", narrator_id: 1, calm_interval: 5, alert_interval: 1 }
+  - type: declarative
+    id: 5
+    priority: 1
+    config: { probe: k8s_api, genome: "KdKxK?Kl‡4000>→Cg>→∧C→Wg", narrator_id: 1, calm_interval: 5, alert_interval: 1 }
+  - type: declarative
+    id: 6
+    priority: 1
+    config: { probe: k8s_api, genome: "KdKd5>→Cd2>→Wd", narrator_id: 1, calm_interval: 5, alert_interval: 1 }

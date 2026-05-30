@@ -78,6 +78,16 @@ with sync_playwright() as p:
     check('per-team stats strip renders', len(stats) >= 1)
     check('stat cells render (ROUNDS/WIN%/BROKEN/DNA/LEN/...)', len(statcells) >= 6)
 
+    # explicit RED / BLUE team framing
+    reds = page.query_selector_all('.evo-team.red')
+    blues = page.query_selector_all('.evo-team.blue')
+    print(f"    RED team labels: {len(reds)} · BLUE team labels: {len(blues)}")
+    check('RED TEAM labels render (the attacks)', len(reds) >= 1)
+    check('BLUE TEAM labels render (the detector genome)', len(blues) >= 1)
+    hold = page.query_selector('.evo-hold')
+    print(f"    holding status: {hold.inner_text() if hold else '(none)'}")
+    check('Blue-holding status renders in header', hold is not None)
+
     # RUN ROUND button present + wires up (click → state change to running/busy)
     runbtn = page.query_selector('#evo-run')
     check('RUN ROUND button present', runbtn is not None)
