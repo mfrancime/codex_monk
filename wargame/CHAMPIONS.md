@@ -1,5 +1,5 @@
 # Kubernetes Wargame — reigning champions
-_updated 2026-05-31 06:50:08 · 105 rounds total_
+_updated 2026-05-31 07:43:19 · 110 rounds total_
 
 ## pods  (`cgroup_pods`)
 - rung **5/5** · mastered **5/5**
