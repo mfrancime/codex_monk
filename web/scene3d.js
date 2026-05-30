@@ -1,0 +1,385 @@
+/* scene3d.js — the full-screen WebGL war-room.
+ *
+ * Three.js r134 (UMD globals: THREE.*). Renders the live swarm as a 3D scene:
+ *   - each fabric is a glowing hub sphere wrapped in a slowly-spinning
+ *     wireframe icosahedron shell, colored by aggregated severity;
+ *   - each agent orbits its hub on a tilted ring, colored by its OWN sev;
+ *   - each VJR gateway link is a curved beam with energy pulses streaming
+ *     from source hub to peer hub;
+ *   - UnrealBloom gives everything the neon war-room glow;
+ *   - a starfield + grid floor give depth, and the camera auto-orbits.
+ *
+ * DEFCON-reactive: as the level drops toward 1 the bloom swells, the scene
+ * tints red, hubs pulse harder and pulses fly faster.
+ *
+ * Public API (window.War3D):
+ *   init(canvas, { onAgentClick })   — stand up the scene once
+ *   update(state)                    — reconcile to the latest /api/swarms
+ *   setDefcon(level)                 — drive global intensity
+ */
+(function () {
+  'use strict';
+
+  const SEV_COLOR = {
+    OK: 0x4dff7c, INFO: 0x5fb8ff, WARN: 0xffb300, CRITICAL: 0xff3030,
+  };
+  const DIM = 0x2da551;
+  const GATEWAY = 0x5fb8ff;
+  const sevColor = (s) => (s && SEV_COLOR[s] != null) ? SEV_COLOR[s] : DIM;
+
+  let renderer, scene, camera, composer, bloom, controls, clock;
+  let hubGroup, starfield;
+  let raycaster, pointer, onAgentClick = null;
+  let defcon = 5;
+
+  const hubs = {};        // path -> hub record
+  let links = [];         // active link records
+  const agentPickables = []; // meshes with userData {path,id} for raycasting
+
+  // ── helpers ───────────────────────────────────────────────────────────
+
+  let _glowTex = null;
+  function glowTexture() {
+    if (_glowTex) return _glowTex;
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    g.addColorStop(0.0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.25, 'rgba(190,255,210,0.9)');
+    g.addColorStop(0.6, 'rgba(77,255,124,0.35)');
+    g.addColorStop(1.0, 'rgba(77,255,124,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 64, 64);
+    _glowTex = new THREE.CanvasTexture(c);
+    return _glowTex;
+  }
+
+  function makeLabel(text, color) {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 30px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 12;
+    ctx.fillText(text.toUpperCase(), 128, 34);
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthTest: false,
+    }));
+    spr.scale.set(16, 4, 1);
+    return spr;
+  }
+
+  function makeStarfield() {
+    const n = 600, pos = new Float32Array(n * 3);
+    // deterministic scatter (no Math.random dependency for repeatability)
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.3999632;            // golden-angle spiral
+      const r = 200 + (i % 400);
+      pos[i * 3]     = Math.cos(a) * r * (0.4 + (i % 7) / 10);
+      pos[i * 3 + 1] = ((i * 53) % 400) - 160;
+      pos[i * 3 + 2] = Math.sin(a) * r * (0.4 + (i % 5) / 10);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    return new THREE.Points(g, new THREE.PointsMaterial({
+      color: 0x2da551, size: 0.7, transparent: true, opacity: 0.5,
+    }));
+  }
+
+  function hubPosition(i, total) {
+    if (total <= 1) return new THREE.Vector3(0, 0, 0);
+    const a = (i / total) * Math.PI * 2;
+    const R = Math.max(22, total * 9);
+    return new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R);
+  }
+
+  // ── hub lifecycle ─────────────────────────────────────────────────────
+
+  function buildHub(swarm, pos) {
+    const group = new THREE.Group();
+    group.position.copy(pos);
+
+    const col = sevColor(swarm.severity);
+    const sphere = new THREE.Mesh(
+      new THREE.SphereGeometry(4.2, 32, 32),
+      new THREE.MeshStandardMaterial({
+        color: col, emissive: col, emissiveIntensity: 1.4,
+        roughness: 0.35, metalness: 0.4,
+      }));
+    group.add(sphere);
+
+    const shell = new THREE.Mesh(
+      new THREE.IcosahedronGeometry(7, 1),
+      new THREE.MeshBasicMaterial({
+        color: col, wireframe: true, transparent: true, opacity: 0.35,
+      }));
+    group.add(shell);
+
+    const label = makeLabel(swarm.swarm_name || 'fabric', col);
+    label.position.set(0, 11, 0);
+    group.add(label);
+
+    hubGroup.add(group);
+    const rec = { group, sphere, shell, label, pos: pos.clone(),
+                  agents: {}, ringR: 13, data: swarm, phase: 0 };
+    syncAgents(rec, swarm);
+    return rec;
+  }
+
+  function syncAgents(rec, swarm) {
+    const live = new Set();
+    const agents = swarm.agents || [];
+    agents.forEach((a, idx) => {
+      live.add(a.id);
+      const isGw = a.role === 'gateway';
+      const col = isGw ? GATEWAY : sevColor(a.sev);
+      let m = rec.agents[a.id];
+      if (!m) {
+        m = new THREE.Mesh(
+          new THREE.SphereGeometry(isGw ? 1.5 : 1.15, 18, 18),
+          new THREE.MeshStandardMaterial({
+            color: col, emissive: col, emissiveIntensity: 1.2,
+            roughness: 0.4, metalness: 0.3,
+          }));
+        m.userData = { path: swarm.path, id: a.id };
+        rec.group.add(m);
+        rec.agents[a.id] = m;
+        agentPickables.push(m);
+      }
+      m.material.color.setHex(col);
+      m.material.emissive.setHex(col);
+      // stable orbit slot
+      m.userData.baseAngle = (idx / Math.max(1, agents.length)) * Math.PI * 2;
+      m.userData.tilt = isGw ? 0.0 : 0.5;
+      m.userData.crit = a.sev === 'CRITICAL';
+    });
+    // remove agents that vanished
+    Object.keys(rec.agents).forEach((id) => {
+      if (!live.has(parseInt(id, 10)) && !live.has(id)) {
+        const m = rec.agents[id];
+        rec.group.remove(m);
+        const pi = agentPickables.indexOf(m);
+        if (pi >= 0) agentPickables.splice(pi, 1);
+        delete rec.agents[id];
+      }
+    });
+  }
+
+  function updateHub(rec, swarm) {
+    const col = sevColor(swarm.severity);
+    rec.sphere.material.color.setHex(col);
+    rec.sphere.material.emissive.setHex(col);
+    rec.shell.material.color.setHex(col);
+    rec.data = swarm;
+    syncAgents(rec, swarm);
+  }
+
+  function removeHub(path) {
+    const rec = hubs[path];
+    if (!rec) return;
+    Object.values(rec.agents).forEach((m) => {
+      const pi = agentPickables.indexOf(m); if (pi >= 0) agentPickables.splice(pi, 1);
+    });
+    hubGroup.remove(rec.group);
+    delete hubs[path];
+  }
+
+  // ── links + pulses ────────────────────────────────────────────────────
+
+  function clearLinks() {
+    links.forEach((lk) => {
+      scene.remove(lk.line);
+      lk.pulses.forEach((p) => scene.remove(p));
+    });
+    links = [];
+  }
+
+  function buildLinks(stateLinks) {
+    clearLinks();
+    (stateLinks || []).forEach((l) => {
+      const a = hubs[l.from], b = hubs[l.to];
+      if (!a || !b) return;
+      const mid = a.pos.clone().add(b.pos).multiplyScalar(0.5);
+      mid.y += a.pos.distanceTo(b.pos) * 0.22;     // arc upward
+      const curve = new THREE.QuadraticBezierCurve3(a.pos, mid, b.pos);
+      const col = l.online ? 0x4dff7c : 0x335544;
+      const geo = new THREE.BufferGeometry().setFromPoints(curve.getPoints(40));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+        color: col, transparent: true, opacity: l.online ? 0.55 : 0.2,
+      }));
+      scene.add(line);
+      // energy pulses streaming along the curve
+      const pulses = [];
+      const nPulse = l.online ? 4 : 0;
+      for (let i = 0; i < nPulse; i++) {
+        const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+          map: glowTexture(), color: 0x9dffc0, transparent: true, opacity: 0.95,
+          depthWrite: false, blending: THREE.AdditiveBlending,
+        }));
+        spr.scale.set(3.2, 3.2, 1);
+        spr.userData = { t: i / nPulse };
+        scene.add(spr);
+        pulses.push(spr);
+      }
+      links.push({ curve, line, pulses, online: l.online });
+    });
+  }
+
+  // ── main loop ─────────────────────────────────────────────────────────
+
+  let _last = 0;
+  const FRAME_MS = 1000 / 30;               // cap at ~30 fps to spare the CPU/GPU
+
+  function animate() {
+    // freeze hook: lets a test (or a paused tab) stop the rAF loop after
+    // rendering one final frame, so a screenshot can capture a stable image.
+    if (window.__war3dFreeze) { composer.render(); return; }
+    requestAnimationFrame(animate);
+    // Don't burn cycles while the tab is hidden — this is the main thing that
+    // pegs a machine when the war-room is left open in a background tab.
+    if (document.hidden) { _last = 0; return; }
+    const now = performance.now();
+    if (now - _last < FRAME_MS) return;     // throttle
+    const dt = _last ? Math.min((now - _last) / 1000, 0.1) : 0.033;
+    _last = now;
+    const t = now / 1000;
+    const heat = (5 - defcon) / 4;            // 0 calm … 1 DEFCON-1
+
+    // hub breathing + shell spin + agent orbits
+    Object.values(hubs).forEach((rec) => {
+      const pulse = 1.3 + Math.sin(t * 2 + rec.pos.x) * 0.25 + heat * 0.6;
+      rec.sphere.material.emissiveIntensity = pulse;
+      rec.shell.rotation.y += dt * 0.25;
+      rec.shell.rotation.x += dt * 0.12;
+      Object.values(rec.agents).forEach((m) => {
+        const u = m.userData;
+        const ang = u.baseAngle + t * (0.35 + (u.crit ? 0.5 : 0));
+        const R = rec.ringR;
+        m.position.set(
+          Math.cos(ang) * R,
+          Math.sin(ang * 1.3) * R * u.tilt * 0.4,
+          Math.sin(ang) * R);
+        const e = 1.0 + (u.crit ? Math.abs(Math.sin(t * 6)) * 1.5 : 0.2);
+        m.material.emissiveIntensity = e;
+      });
+    });
+
+    // stream pulses along links
+    const speed = 0.12 + heat * 0.25;
+    links.forEach((lk) => {
+      lk.pulses.forEach((spr) => {
+        spr.userData.t = (spr.userData.t + dt * speed) % 1;
+        spr.position.copy(lk.curve.getPoint(spr.userData.t));
+      });
+    });
+
+    if (starfield) starfield.rotation.y += dt * 0.01;
+
+    // DEFCON-reactive bloom + fog tint
+    bloom.strength = 0.9 + heat * 1.1 + Math.sin(t * 3) * heat * 0.2;
+    scene.fog.color.setRGB(0.01 + heat * 0.08, 0.03, 0.024);
+
+    controls.update();
+    composer.render();
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    bloom.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
+  }
+
+  function handleClick(ev) {
+    if (!onAgentClick) return;
+    const r = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((ev.clientX - r.left) / r.width) * 2 - 1;
+    pointer.y = -((ev.clientY - r.top) / r.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hit = raycaster.intersectObjects(agentPickables, false)[0];
+    if (hit) onAgentClick(hit.object.userData.path, hit.object.userData.id);
+  }
+
+  // ── public API ────────────────────────────────────────────────────────
+
+  function init(canvas, opts) {
+    onAgentClick = opts && opts.onAgentClick;
+    clock = new THREE.Clock();
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x020806, 0.012);
+
+    camera = new THREE.PerspectiveCamera(
+      55, window.innerWidth / window.innerHeight, 0.1, 3000);
+    camera.position.set(0, 34, 82);
+
+    renderer = new THREE.WebGLRenderer({
+      canvas, antialias: true, alpha: true, preserveDrawingBuffer: true,
+      powerPreference: 'high-performance' });
+    // pixelRatio 1 (not devicePixelRatio) — on HiDPI/4K a 2× buffer with bloom
+    // is 4× the pixels and is what makes the scene hang on weaker GPUs.
+    renderer.setPixelRatio(1);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    scene.add(new THREE.AmbientLight(0x224433, 0.7));
+    const key = new THREE.PointLight(0x4dff7c, 1.0, 600);
+    key.position.set(0, 80, 60); scene.add(key);
+
+    const grid = new THREE.GridHelper(600, 80, 0x1a4022, 0x0c1f12);
+    grid.position.y = -20; scene.add(grid);
+
+    starfield = makeStarfield(); scene.add(starfield);
+    hubGroup = new THREE.Group(); scene.add(hubGroup);
+
+    composer = new THREE.EffectComposer(renderer);
+    composer.addPass(new THREE.RenderPass(scene, camera));
+    // bloom at half resolution — its blur passes are the heaviest part of the
+    // frame; half-res is visually almost identical and ~4× cheaper.
+    bloom = new THREE.UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth * 0.5, window.innerHeight * 0.5),
+      1.0, 0.7, 0.18);
+    composer.addPass(bloom);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true; controls.dampingFactor = 0.06;
+    controls.autoRotate = true; controls.autoRotateSpeed = 0.45;
+    controls.minDistance = 24; controls.maxDistance = 220;
+    controls.enablePan = false;
+
+    raycaster = new THREE.Raycaster();
+    pointer = new THREE.Vector2();
+    renderer.domElement.addEventListener('click', handleClick);
+    window.addEventListener('resize', onResize);
+
+    animate();
+    window.__war3dReady = true;
+  }
+
+  function update(state) {
+    const swarms = (state.swarms || []).filter((s) => s.online);
+    // reconcile hubs
+    const livePaths = new Set(swarms.map((s) => s.path));
+    Object.keys(hubs).forEach((p) => { if (!livePaths.has(p)) removeHub(p); });
+    swarms.forEach((s, i) => {
+      const pos = hubPosition(i, swarms.length);
+      if (!hubs[s.path]) {
+        hubs[s.path] = buildHub(s, pos);
+      } else {
+        hubs[s.path].pos.copy(pos);
+        hubs[s.path].group.position.copy(pos);
+        updateHub(hubs[s.path], s);
+      }
+    });
+    buildLinks(state.links);
+    window.__war3dHubs = Object.keys(hubs).length;
+    window.__war3dAgents = agentPickables.length;
+  }
+
+  function setDefcon(level) { defcon = level || 5; }
+
+  window.War3D = { init, update, setDefcon };
+})();

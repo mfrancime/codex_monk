@@ -8,7 +8,12 @@
 </head>
 <body data-defcon="5">
 
-<header class="hud">
+<!-- full-screen WebGL war-room (behind everything) -->
+<canvas id="war-canvas"></canvas>
+<div class="scene-vignette"></div>
+
+<!-- floating HUD bar -->
+<header class="hud glass">
   <div class="brand">
     <span class="logo">▣</span>
     <span class="name">CODEX_MONK</span>
@@ -20,82 +25,72 @@
     <span class="lvl" id="defcon-lvl">5</span>
     <span class="state" id="defcon-state">NOMINAL</span>
   </div>
+  <div class="topo-readout"><span id="topo-meta">discovering fabrics…</span></div>
   <div class="status">
     <span class="dot" id="conn-dot"></span>
     <span id="conn-text">connecting…</span>
   </div>
 </header>
 
-<main class="grid">
+<!-- Control column (floating left) -->
+<section class="panel ctrl glass float-left">
+  <div class="panel-head"><span>SWARM CONTROL</span></div>
+  <ul class="config-list" id="config-list">
+    <li class="empty">loading…</li>
+  </ul>
+  <div class="panel-head"><span>RUNNING</span></div>
+  <ul class="proc-list" id="proc-list">
+    <li class="empty">none</li>
+  </ul>
+  <div class="panel-head"><span>PROBES</span></div>
+  <ul class="probe-list" id="probe-list"></ul>
+</section>
 
-  <!-- Control column (left) -->
-  <section class="panel ctrl">
-    <div class="panel-head"><span>SWARM CONTROL</span></div>
-    <ul class="config-list" id="config-list">
-      <li class="empty">loading…</li>
-    </ul>
-    <div class="panel-head"><span>RUNNING</span></div>
-    <ul class="proc-list" id="proc-list">
-      <li class="empty">none</li>
-    </ul>
-    <div class="panel-head"><span>PROBES</span></div>
-    <ul class="probe-list" id="probe-list"></ul>
-  </section>
+<!-- Agent grid (floating right) -->
+<section class="panel grid-panel glass float-right">
+  <div class="panel-head">
+    <span>AGENTS</span>
+    <span class="meta" id="agent-meta">0</span>
+  </div>
+  <div class="grid-wrap">
+    <table class="agent-grid">
+      <thead><tr>
+        <th>SWARM</th>
+        <th>ID</th>
+        <th>ROLE</th>
+        <th>STATE</th>
+        <th>HB</th>
+        <th>SEV</th>
+        <th>CODE</th>
+      </tr></thead>
+      <tbody id="agent-tbody"></tbody>
+    </table>
+  </div>
+</section>
 
-  <!-- Topology canvas (center) -->
-  <section class="panel topo">
-    <div class="panel-head">
-      <span>TOPOLOGY</span>
-      <span class="meta" id="topo-meta">discovering fabrics…</span>
-    </div>
-    <svg id="topo-svg" viewBox="0 0 1000 600"
-         preserveAspectRatio="xMidYMid meet"></svg>
-  </section>
+<!-- Log tail (floating bottom-left) -->
+<section class="panel log glass float-bl">
+  <div class="panel-head">
+    <span>FABRIC LOG</span>
+    <select id="log-fabric"></select>
+  </div>
+  <div class="log-wrap" id="log-tbody"></div>
+</section>
 
-  <!-- Agent grid (right) -->
-  <section class="panel grid-panel">
-    <div class="panel-head">
-      <span>AGENTS</span>
-      <span class="meta" id="agent-meta">0</span>
-    </div>
-    <div class="grid-wrap">
-      <table class="agent-grid">
-        <thead><tr>
-          <th>SWARM</th>
-          <th>ID</th>
-          <th>ROLE</th>
-          <th>STATE</th>
-          <th>HB</th>
-          <th>SEV</th>
-          <th>CODE</th>
-        </tr></thead>
-        <tbody id="agent-tbody"></tbody>
-      </table>
-    </div>
-  </section>
+<!-- Alert timeline (floating bottom-right) -->
+<section class="panel alerts glass float-br">
+  <div class="panel-head">
+    <span>ALERTS</span>
+    <span class="meta" id="alert-meta">0</span>
+  </div>
+  <div class="alert-wrap" id="alert-tbody"></div>
+</section>
 
-  <!-- Log tail (bottom-left) -->
-  <section class="panel log">
-    <div class="panel-head">
-      <span>FABRIC LOG</span>
-      <select id="log-fabric"></select>
-    </div>
-    <div class="log-wrap" id="log-tbody"></div>
-  </section>
-
-  <!-- Alert timeline (bottom-right) -->
-  <section class="panel alerts">
-    <div class="panel-head">
-      <span>ALERTS</span>
-      <span class="meta" id="alert-meta">0</span>
-    </div>
-    <div class="alert-wrap" id="alert-tbody"></div>
-  </section>
-
-</main>
+<!-- hint -->
+<div class="scene-hint">drag to orbit · scroll to zoom · click a node</div>
 
 <!-- Agent detail drawer (opens on click) -->
-<aside id="drawer" class="drawer" aria-hidden="true">
+<aside id="drawer" class="drawer glass" aria-hidden="true">
   <div class="drawer-head">
     <span id="drawer-title">AGENT</span>
     <button id="drawer-close" type="button">×</button>
@@ -141,6 +136,17 @@
 
 <div class="klaxon" id="klaxon"></div>
 
+<!-- Three.js r134 (UMD globals) + bloom postprocessing, vendored offline -->
+<script src="/vendor/three.min.js"></script>
+<script src="/vendor/CopyShader.js"></script>
+<script src="/vendor/LuminosityHighPassShader.js"></script>
+<script src="/vendor/EffectComposer.js"></script>
+<script src="/vendor/RenderPass.js"></script>
+<script src="/vendor/ShaderPass.js"></script>
+<script src="/vendor/MaskPass.js"></script>
+<script src="/vendor/UnrealBloomPass.js"></script>
+<script src="/vendor/OrbitControls.js"></script>
+<script src="/scene3d.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
