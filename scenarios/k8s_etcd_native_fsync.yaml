@@ -1,0 +1,14 @@
+# ETCD FRONT, NATIVE (feed/Σ). WAL fsync latency climbs — disk stall precedes outage.
+name: k8s_etcd_native_fsync
+domain: feed
+ticks_total: 80
+phases:
+  - name: snappy
+    range: [0, 49]
+    frame: { etcd.has_leader: 1, etcd.fsync_avg_ms: 4, etcd.db_size_mb: 200, etcd.available: 1 }
+    truth: null
+  - name: fsync_slow
+    range: [50, 79]
+    frame: { etcd.has_leader: 1, etcd.fsync_avg_ms: 400, etcd.db_size_mb: 200, etcd.available: 1 }
+    truth: { sev: WARN, code: GATE_DOWN }
+    deadline_ticks: 5

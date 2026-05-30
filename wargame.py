@@ -46,6 +46,12 @@ import json
 import os
 import time
 
+# Make the config-driven feed surface (etcd Σ, nodes Ω from config/feeds.yaml)
+# available to the wargame BEFORE the probe registry imports feed (it reads the
+# spec at import). So the etcd/nodes fronts gate on first-class native signals.
+os.environ.setdefault('CODEX_FEED_SPEC', os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), 'config', 'feeds.yaml'))
+
 from swarm import probes
 from swarm.genome import interpret
 from swarm.fitness import load_scenario, _make_frame
@@ -164,6 +170,30 @@ FRONTS = {
             ['scenarios/k8s_sched_pileup.yaml', 'scenarios/k8s_sched_storm.yaml',
              'scenarios/k8s_sched_rollout_decoy.yaml',
              'scenarios/k8s_sched_nodeloss_decoy.yaml'],
+        ],
+    },
+    # ── NATIVE feed fronts: first-class signals from config/feeds.yaml (no
+    #    proxying). domain 'feed' → opcode table is built from the feed spec. ──
+    'etcd_native': {
+        'domain': 'feed', 'flavor': '🧠 ETCD (native) — leader / WAL fsync',
+        'loads': ['Σl', 'Σc', 'Σf', 'Σd', 'Σp', 'Σ?'],
+        'sev': ['O', 'W', 'C'], 'codes': ['o', 'g'],
+        'ladder': [
+            ['scenarios/k8s_etcd_native_noleader.yaml'],
+            ['scenarios/k8s_etcd_native_noleader.yaml', 'scenarios/k8s_etcd_native_fsync.yaml'],
+            ['scenarios/k8s_etcd_native_noleader.yaml', 'scenarios/k8s_etcd_native_fsync.yaml',
+             'scenarios/k8s_etcd_native_bigdb_decoy.yaml'],
+        ],
+    },
+    'nodes_native': {
+        'domain': 'feed', 'flavor': '🖥️ NODES (native) — per-node conditions',
+        'loads': ['Ωn', 'Ωr', 'Ωm', 'Ωd', 'Ωp', 'Ωu', 'Ω?'],
+        'sev': ['O', 'W', 'C'], 'codes': ['o', 'x'],
+        'ladder': [
+            ['scenarios/k8s_nodes_native_notready.yaml'],
+            ['scenarios/k8s_nodes_native_notready.yaml', 'scenarios/k8s_nodes_native_masscrit.yaml'],
+            ['scenarios/k8s_nodes_native_notready.yaml', 'scenarios/k8s_nodes_native_masscrit.yaml',
+             'scenarios/k8s_nodes_native_cordon_decoy.yaml'],
         ],
     },
 }
