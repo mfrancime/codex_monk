@@ -1,0 +1,33 @@
+# k8s_pod_multi — PODS FRONT (cgroup_pods / Π). Noisy-neighbour spread.
+#
+# Red Team move: instead of one hot pod, EIGHT pods cross the pressure line at
+# once (count_pressured = 8) while the per-pod max psi.some sits at 9 — a broad
+# memory squeeze across the node, no OOMKills yet. Blue must still page WARN
+# POD_PRESSURE. Guards against a champion that only ever looked at OOM deltas.
+name: k8s_pod_multi
+domain: cgroup_pods
+ticks_total: 80
+
+phases:
+  - name: calm
+    range: [0, 49]
+    frame:
+      pod.max.psi_some_avg10: 3.0
+      pod.max.psi_full_avg10: 0.0
+      pod.delta.oom_kills_60s: 0
+      pod.count: 12
+      pod.count_pressured: 0
+      pod.cgroup_root: 1
+    truth: null
+
+  - name: broad_squeeze
+    range: [50, 79]
+    frame:
+      pod.max.psi_some_avg10: 9.0
+      pod.max.psi_full_avg10: 1.0
+      pod.delta.oom_kills_60s: 0
+      pod.count: 12
+      pod.count_pressured: 8
+      pod.cgroup_root: 1
+    truth: { sev: WARN, code: POD_PRESSURE }
+    deadline_ticks: 5

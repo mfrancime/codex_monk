@@ -577,6 +577,7 @@ class VizHandler(BaseHTTPRequestHandler):
             '.html': 'text/html; charset=utf-8',
             '.css':  'text/css',
             '.js':   'application/javascript',
+            '.json': 'application/json; charset=utf-8',
             '.svg':  'image/svg+xml',
         }.get(ext, 'application/octet-stream')
         try:

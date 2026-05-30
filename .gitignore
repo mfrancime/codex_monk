@@ -10,6 +10,11 @@ __pycache__/
 # at runtime; the directory is committed for shape (empty) but its
 # contents are not.
 /graph/*.jsonl
+/graph/*.log
+
+# the durable wargame evolution record lives in ./wargame/ (tracked); the
+# web tab's regenerated data file web/wargame.json is tracked too — that is
+# the committed "evolution progress" pushed each round.
 
 # orphan temp files left by half-finished pip operations
 /requirements.txt.tmp.*

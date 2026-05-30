@@ -1,0 +1,22 @@
+# k8s_pod_noisy_decoy — PODS FRONT (cgroup_pods / Π). DECOY (truth: null).
+#
+# Red Team feint: pods run hot-but-healthy — psi.some sits at 4 (real Linux
+# pods are never a flat 0 under load) with zero OOMKills, sustained forever.
+# A trigger-happy Blue that gates on `Πs > 0` (the parsimony shortcut an
+# evolver loves when calm is perfect-zero) pages constantly here → infeasible.
+# This pins Blue's pod-pressure threshold to > 4.
+name: k8s_pod_noisy_decoy
+domain: cgroup_pods
+ticks_total: 160
+
+phases:
+  - name: hot_but_healthy
+    range: [0, 159]
+    frame:
+      pod.max.psi_some_avg10: 4.0
+      pod.max.psi_full_avg10: 0.5
+      pod.delta.oom_kills_60s: 0
+      pod.count: 9
+      pod.count_pressured: 0
+      pod.cgroup_root: 1
+    truth: null
