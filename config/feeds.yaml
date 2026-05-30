@@ -1,0 +1,33 @@
+# config/feeds.yaml — sensor surfaces defined as DATA, read by the `feed` probe
+# (point CODEX_FEED_SPEC at this file). Adding a SENSE is now adding a feed here:
+# no new Python, no new opcode hard-coding. Both Red (attacks) and Blue (genomes)
+# inherit every key below at once, the same way they share any probe's OPCODES.
+#
+# This is the config-driven realization of per-node + per-etcd sensing — the
+# capability is data, not a module.
+
+feeds:
+  # ── per-ETCD: native etcd /metrics, first-class signals (opcode Σ) ────────
+  - opcode: "Σ"
+    name: etcd
+    source: { kind: prometheus, fake_env: CODEX_ETCD_FAKE_PATH, url_env: CODEX_ETCD_METRICS_URL }
+    signals:
+      - { sig: l, key: etcd.has_leader,            metric: etcd_server_has_leader, agg: sum, bool: true }
+      - { sig: c, key: etcd.leader_changes_60s,    metric: etcd_server_leader_changes_seen_total, agg: sum, delta60: true }
+      - { sig: f, key: etcd.fsync_avg_ms,          ratio: [etcd_disk_wal_fsync_duration_seconds_sum, etcd_disk_wal_fsync_duration_seconds_count], scale: 1000 }
+      - { sig: d, key: etcd.db_size_mb,            metric: etcd_mvcc_db_total_size_in_bytes, agg: sum, scale: 0.00000095367 }
+      - { sig: p, key: etcd.proposal_failures_60s, metric: etcd_server_proposals_failed_total, agg: sum, delta60: true }
+      - { sig: "?", key: etcd.available,           present: true }
+
+  # ── per-NODE: native node conditions from an /api/v1/nodes-shaped doc (Ω) ─
+  - opcode: "Ω"
+    name: kube_node
+    source: { kind: json, fake_env: CODEX_KUBE_NODE_FAKE_PATH, url_env: CODEX_KUBE_NODE_URL }
+    signals:
+      - { sig: n, key: node.count,         count: { items: items } }
+      - { sig: r, key: node.not_ready,     count: { items: items, condition: Ready, status_ne: "True" } }
+      - { sig: m, key: node.mem_pressure,  count: { items: items, condition: MemoryPressure, status_eq: "True" } }
+      - { sig: d, key: node.disk_pressure, count: { items: items, condition: DiskPressure, status_eq: "True" } }
+      - { sig: p, key: node.pid_pressure,  count: { items: items, condition: PIDPressure, status_eq: "True" } }
+      - { sig: u, key: node.unschedulable, count: { items: items, field: spec.unschedulable, truthy: true } }
+      - { sig: "?", key: node.available,   present: true }
