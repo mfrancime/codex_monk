@@ -225,9 +225,13 @@ async function refreshLog() {
   const sel = $('log-fabric');
   if (!sel.value && STATE.swarms.length) {
     // populate the dropdown
-    sel.innerHTML = STATE.swarms.map(
-      (s) => `<option value="${s.path}">${s.path.split('/').pop()}</option>`
-    ).join('');
+    // short label: codex.k8s_aggregator.fabric → k8s_aggregator, so the
+    // native select stays inside its panel (see .log #log-fabric in CSS).
+    sel.innerHTML = STATE.swarms.map((s) => {
+      const short = s.path.split('/').pop()
+        .replace(/^codex\./, '').replace(/\.fabric$/, '');
+      return `<option value="${s.path}">${short}</option>`;
+    }).join('');
   }
   const fabric = sel.value;
   if (!fabric) return;

@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CODEX_MONK · WHAT IS THIS</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    /* the war-room locks scroll; the docs page is a scrolling document, so
+       override just for this page. Reuses the :root neon tokens + .glass. */
+    html, body { overflow: auto; height: auto; background: var(--bg-deep); }
+    body::before {
+      content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse at 50% -10%, rgba(40,80,40,0.10), transparent 60%),
+        repeating-linear-gradient(0deg, transparent, transparent 3px,
+          rgba(40,80,40,0.03) 3px, rgba(40,80,40,0.03) 4px);
+    }
+    .doc { position: relative; z-index: 1; max-width: 880px; margin: 0 auto;
+           padding: 28px 22px 80px; }
+
+    .doc-hud {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 16px; margin: -28px -22px 26px;
+      background: rgba(8,18,10,0.86);
+      border-bottom: 1px solid var(--green-soft);
+      backdrop-filter: blur(6px);
+    }
+    .doc-hud .logo { color: var(--green); font-size: 18px;
+      text-shadow: 0 0 10px var(--green); }
+    .doc-hud .name { color: var(--green); letter-spacing: 3px; font-weight: 700; }
+    .doc-hud .sub  { color: var(--text-dim); letter-spacing: 2px; font-size: 11px; }
+    .doc-hud .back { margin-left: auto; color: var(--info); text-decoration: none;
+      border: 1px solid var(--green-soft); padding: 5px 12px; border-radius: 3px;
+      letter-spacing: 2px; font-size: 11px; }
+    .doc-hud .back:hover { background: var(--panel-hi); color: var(--green); }
+
+    .doc h1 { color: var(--green); letter-spacing: 4px; font-size: 26px;
+      margin: 4px 0 6px; text-shadow: 0 0 16px rgba(77,255,124,0.4); }
+    .doc .tag { color: var(--text-dim); letter-spacing: 2px; margin: 0 0 28px; }
+    .doc h2 { color: var(--green); letter-spacing: 2px; font-size: 15px;
+      margin: 34px 0 10px; padding-bottom: 6px;
+      border-bottom: 1px solid var(--green-soft); }
+    .doc h2 .n { color: var(--green-dim); margin-right: 10px; }
+    .doc p, .doc li { color: var(--text); }
+    .doc a { color: var(--info); }
+    .doc strong { color: var(--green); font-weight: 600; }
+    .doc code { color: var(--amber); background: var(--bg-deep);
+      border: 1px solid var(--green-soft); border-radius: 3px; padding: 1px 5px;
+      font-family: var(--mono); font-size: 12px; }
+
+    .card { background: rgba(10,20,10,0.6); border: 1px solid var(--green-soft);
+      border-radius: 6px; padding: 14px 16px; margin: 12px 0; }
+
+    .law { border-left: 3px solid var(--green); }
+    .law .big { color: var(--green); font-size: 15px; letter-spacing: 1px; }
+
+    table.t { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12px; }
+    table.t th { text-align: left; color: var(--green-dim); letter-spacing: 1px;
+      border-bottom: 1px solid var(--green-soft); padding: 6px 8px; }
+    table.t td { border-bottom: 1px solid rgba(26,64,34,0.5); padding: 6px 8px;
+      color: var(--text); vertical-align: top; }
+    table.t td .op { color: var(--amber); font-weight: 700; }
+
+    .flow { display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+      margin: 14px 0; font-size: 12px; }
+    .flow .node { border: 1px solid var(--green-soft); border-radius: 4px;
+      padding: 6px 10px; color: var(--green); background: var(--panel-hi); }
+    .flow .arr { color: var(--green-dim); }
+
+    .sev { display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+      margin-right: 6px; vertical-align: middle; box-shadow: 0 0 6px currentColor; }
+    .ok { color: var(--green); } .warn { color: var(--amber); } .crit { color: var(--red); }
+
+    .doc footer { margin-top: 40px; color: var(--text-dim); font-size: 11px;
+      border-top: 1px solid var(--green-soft); padding-top: 14px; }
+  </style>
+</head>
+<body data-defcon="5">
+<div class="doc">
+
+  <div class="doc-hud">
+    <span class="logo">▣</span>
+    <span class="name">CODEX_MONK</span>
+    <span class="sub">what is this</span>
+    <a class="back" href="/">← WAR ROOM</a>
+  </div>
+
+  <h1>An evolvable, declarative agentic OS</h1>
+  <p class="tag">behavior is data — swarms of tiny agents, gated by DNA, watching the machine</p>
+
+  <p>codex_monk is a miniature operating system for <strong>swarms of monitoring
+  agents</strong>. Each agent watches some surface of a machine — kernel memory
+  pressure, per-pod cgroups, disk and network, a Kubernetes control plane — and
+  decides a severity. What makes it unusual is <em>how</em> those decisions are
+  expressed: not as code, but as a short string of <strong>genome</strong>
+  opcodes that an interpreter runs against live readings. New behavior is a new
+  genome string and a line of YAML, never a new program.</p>
+
+  <div class="card law">
+    <div class="big">▎ The design law</div>
+    <p style="margin-bottom:0">New behavior comes from a <strong>new genome string + new YAML</strong>,
+    never a new Python class. There is exactly one agent class and one genome
+    interpreter; every capability is recombined from opcodes and config. Adding
+    code is a deliberate, named tradeoff — not the default.</p>
+  </div>
+
+  <h2><span class="n">01</span>The fabric — a shared-memory world</h2>
+  <p>Every swarm lives in a single fixed-size <strong>fabric</strong>: a 512&nbsp;KB
+  shared-memory file (<code>/dev/shm/codex.&lt;name&gt;.fabric</code>) holding agent
+  control blocks, a 1024-slot key/value <em>state table</em>, per-agent inboxes,
+  and an event log. Agents are real OS processes that meet only here — they post
+  their verdicts to state, message each other through inboxes, and leave a trail
+  in the log. The format is byte-compatible with the swarm it forked from, which
+  is why one swarm can read another's mind (see the governor below).</p>
+
+  <h2><span class="n">02</span>The genome — alien DNA, not code</h2>
+  <p>A genome is a compact UTF-8 string of stack-based (RPN) opcodes, interpreted
+  against a <strong>Frame</strong> (one tick of a probe's readings) plus a
+  per-domain opcode table, yielding a <code>(severity, code)</code> verdict. It's
+  deliberately crash-proof: unknown or mutated opcodes simply no-op, so a garbled
+  genome can only score poorly — it can never take an agent down. That property
+  is what lets the system <strong>evolve its own rules</strong> by random mutation.</p>
+  <table class="t">
+    <tr><th>Piece</th><th>Opcodes</th><th>Meaning</th></tr>
+    <tr><td>literals</td><td><span class="op">0–9</span> &nbsp; <span class="op">‡</span>NNN</td><td>push a digit / a multi-digit number</td></tr>
+    <tr><td>compare</td><td><span class="op">&gt; &lt; ≥ ≤ ≡ ≠</span></td><td>pop two, push the comparison</td></tr>
+    <tr><td>boolean</td><td><span class="op">∧ ∨ ¬</span></td><td>and / or / not</td></tr>
+    <tr><td>emit</td><td><span class="op">→</span>XY &nbsp; <span class="op">;</span></td><td>if true, emit severity X + code Y, stop; <code>;</code> ends a rule</td></tr>
+    <tr><td>load</td><td><span class="op">ψ ~ Π Δ Ν K Ψ Γ</span> …</td><td>per-probe: push a live reading onto the stack</td></tr>
+  </table>
+  <p>Example — <code>Ka1&lt;K?∧→Cg</code> reads as: <em>"if the apiserver is
+  unhealthy <strong>and</strong> we actually hold credentials for it, emit
+  CRITICAL / GATE_DOWN."</em></p>
+
+  <h2><span class="n">03</span>The agent — one class, three roles</h2>
+  <p>There is a single <code>DeclarativeAgent</code>. Its role is chosen by config,
+  never by subclass:</p>
+  <ul>
+    <li><strong>probe</strong> — has a genome: samples its domain, runs the
+      interpreter, and emits on every verdict change.</li>
+    <li><strong>sink</strong> — has <code>consume_types</code>: persists the alerts
+      it receives into a timeline.</li>
+    <li><strong>mutator</strong> — has a target: evolves a genome by trying random
+      mutations, keeping only improvements, and writing the winner back — even
+      across swarms. The swarm rewrites its own DNA while running.</li>
+  </ul>
+
+  <h2><span class="n">04</span>The probes — sensor surfaces</h2>
+  <p>A probe is a small module that turns a slice of the machine into a Frame and
+  claims a disjoint opcode letter. Adding a domain = adding one probe module; the
+  behavior on top of it is still pure genome + YAML.</p>
+  <table class="t">
+    <tr><th>Probe</th><th>Opcode</th><th>Watches</th></tr>
+    <tr><td>kernel</td><td><span class="op">ψ ~ κ</span></td><td>PSI memory pressure, swap, cgroup memory</td></tr>
+    <tr><td>cgroup_pods</td><td><span class="op">Π</span></td><td>per-pod cgroup pressure + OOM kills</td></tr>
+    <tr><td>disk_net</td><td><span class="op">Δ Ν</span></td><td>disk utilization + network errors</td></tr>
+    <tr><td>k8s_api</td><td><span class="op">K</span></td><td>control-plane health (apiserver, nodes, events)</td></tr>
+    <tr><td>fabric_peer</td><td><span class="op">Ψ</span></td><td>introspect <em>one</em> sibling swarm's state</td></tr>
+    <tr><td>quorum</td><td><span class="op">Γ</span></td><td>correlate <em>many</em> sibling swarms — the governor</td></tr>
+  </table>
+
+  <h2><span class="n">05</span>Multiswarm — composing a cluster</h2>
+  <p>Many swarms run side by side, one OS process each, every one with its own
+  fabric. They bridge through a <strong>gateway</strong> agent speaking VJR — an
+  HMAC-signed, length-prefixed JSON protocol — so a node's alert can travel to a
+  central aggregator. The k8s monitor composes three:</p>
+  <div class="flow">
+    <span class="node">k8s_node</span><span class="arr">──▶</span>
+    <span class="node">k8s_aggregator</span><span class="arr">◀──</span>
+    <span class="node">k8s_cluster</span>
+  </div>
+  <p>Nodes watch the host; the cluster swarm watches the control plane; the
+  aggregator is the central timeline they all report to.</p>
+
+  <h2><span class="n">06</span>The governor — judgement across swarms</h2>
+  <p>The aggregator runs a <strong>governor</strong>: a <code>quorum</code> probe
+  that opens every sibling fabric, reads each one's verdict, and turns per-swarm
+  signals into a single cluster-wide judgement. Its whole policy is one genome:</p>
+  <div class="card"><code>Γc0&gt;Γk∧→Cd ; Γk0≡→Cg ; Γp0&gt;→Wp</code>
+    <p style="margin:8px 0 0">a node CRITICAL while the control plane is healthy
+    → <span class="crit"><span class="sev"></span>CLUSTER_DEGRADED</span>;
+    the control plane itself unreadable → <span class="crit"><span class="sev"></span>GATE_DOWN</span>;
+    a node merely pressured → <span class="warn"><span class="sev"></span>POD_PRESSURE</span>.</p>
+  </div>
+  <p>Notably this needed <strong>no new opcode</strong> — cross-fabric aggregation
+  lives in the probe, and the stateless genome just gates on the resulting counts.</p>
+
+  <h2><span class="n">07</span>The war room — seeing it live</h2>
+  <p>The page you came from is a full-screen 3D view of all this in motion: each
+  swarm is a glowing hub, agents orbit it, gateway links pulse with traffic, and
+  the whole scene reddens as the global <strong>DEFCON</strong> drops. Hubs are
+  colored by severity —
+  <span class="ok"><span class="sev"></span>OK</span>,
+  <span class="warn"><span class="sev"></span>WARN</span>,
+  <span class="crit"><span class="sev"></span>CRITICAL</span> —
+  reading straight from the same fabrics the agents write to. It is a window onto
+  live shared memory, not a mock-up.</p>
+
+  <footer>
+    codex_monk · behavior is data · <a href="/">return to the war room →</a>
+  </footer>
+
+</div>
+</body>
+</html>
