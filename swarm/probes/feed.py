@@ -214,10 +214,11 @@ def _eval_signal(sig: dict, kind: str, text: str, doc, available: bool, now: flo
 
 # ── Frame + OPCODES, both built from the spec ───────────────────────────────
 
-def sample_all() -> dict:
+def _frame(feeds) -> dict:
+    """Build a Frame from any list of feed specs (the core engine)."""
     now = time.time()
     frame = {}
-    for feed in _SPEC:
+    for feed in feeds:
         src = feed.get('source') or {}
         kind = src.get('kind', 'json')
         text = _fetch(src)
@@ -235,9 +236,9 @@ def sample_all() -> dict:
     return frame
 
 
-def _build_opcodes() -> dict:
+def _opcodes_for(feeds) -> dict:
     table = {}
-    for feed in _SPEC:
+    for feed in feeds:
         op = feed.get('opcode')
         if not op:
             continue
@@ -248,7 +249,32 @@ def _build_opcodes() -> dict:
     return table
 
 
-OPCODES = _build_opcodes()
+def _normalize(spec):
+    if isinstance(spec, dict):
+        return spec.get('feeds') or []
+    return spec or []
+
+
+def build_probe(spec, name='feed'):
+    """Build a PER-INSTANCE probe from a spec (a list of feeds, or a dict with a
+    'feeds:' key). This is what lets an AGENT carry its own sensor surface in its
+    own config — perception becomes per-agent data, not a global module. Returns
+    a Probe with sample_all/opcodes/describe bound to just this spec."""
+    feeds = _normalize(spec)
+    from swarm.probes import Probe
+    return Probe(name,
+                 (lambda fs=feeds: _frame(fs)),
+                 _opcodes_for(feeds),
+                 (lambda fs=feeds: 'feed(' + ', '.join(
+                     f.get('name', f.get('opcode', '?')) for f in fs) + ')'))
+
+
+# The globally-registered `feed` probe is just build_probe over the env spec.
+def sample_all() -> dict:
+    return _frame(_SPEC)
+
+
+OPCODES = _opcodes_for(_SPEC)
 
 
 def describe() -> str:

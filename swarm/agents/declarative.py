@@ -96,7 +96,7 @@ class DeclarativeAgent(Agent):
                  # at on_tick. Default 'kernel' preserves the original
                  # PSI/swap/mem behavior. Other domains: 'cgroup_pods',
                  # 'disk_net', 'k8s_api', etc.
-                 probe='kernel'):
+                 probe='kernel', probe_spec=None):
         super().__init__(agent_id, agent_type, priority,
                          state_prefix=state_prefix)
         # probe
@@ -120,8 +120,18 @@ class DeclarativeAgent(Agent):
         # local DNA chain to read). Falls back to initial_genome at first cycle.
         self._current_genome = None
         # probe plugin — resolve at construction so misconfig fails loudly
+        # PROBE resolution. Default: look up a registered probe by name. But if
+        # the agent's config carries its OWN `probe_spec` (a feed spec: sources +
+        # signal→opcode mappings), build a per-agent sensor surface from it. That
+        # makes PERCEPTION per-agent config — the agent declares not just how it
+        # DECIDES (genome) but what it SENSES, with no new probe module.
         self.probe_name = probe
-        self._probe = probes.get(probe)
+        if probe_spec:
+            from swarm.probes.feed import build_probe
+            self._probe = build_probe(probe_spec, name=f'feed:{agent_id}')
+            self.probe_name = 'feed'
+        else:
+            self._probe = probes.get(probe)
 
         self._last_sev = None
         self._last_code = None
