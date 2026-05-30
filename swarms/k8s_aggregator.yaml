@@ -4,11 +4,14 @@
 # sub-swarm via VJR. Persists everything to graph/aggregator_alerts.jsonl
 # so the operator has one timeline across the cluster.
 #
-# A second agent (id=2) could later run a correlation genome over
-# fabric state written by the gateway to do "3 nodes pressured AND
-# apiserver healthy → CLUSTER_DEGRADED" — that's Phase B+ work and would
-# require a probe that introspects fabric state (planned for the next
-# vajrayana fabric-peer probe).
+# Two agents:
+#   id=1  audit sink — the central record of every cluster alert.
+#   id=2  GOVERNOR — a correlation genome over the live state of every
+#         sibling fabric (via the `quorum` probe), turning per-swarm
+#         verdicts into one cluster-wide judgement and feeding it back
+#         into the same audit timeline. No new opcode and no new agent
+#         class: the cross-fabric aggregation lives in the probe, the
+#         judgement is data (the genome).
 
 agents:
 
@@ -19,3 +22,29 @@ agents:
     config:
       consume_types: [700]
       persist_path: graph/aggregator_alerts.jsonl
+
+  # Governor — correlate node + control-plane health across fabrics.
+  #
+  #   quorum opcodes:  Γc node_critical  Γp node_pressured
+  #                    Γk control_ok (apiserver healthy)
+  #
+  #   rule 1  Γc0>Γk∧→Cd : a node is CRITICAL *and* the control plane is
+  #           still healthy        → CRITICAL CLUSTER_DEGRADED
+  #   rule 2  Γk0≡→Cg     : the control plane itself is down/unreadable
+  #                          → CRITICAL GATE_DOWN  (dominates rule 1)
+  #   rule 3  Γp0>→Wp     : a node is merely pressured (WARN)
+  #                          → WARN POD_PRESSURE
+  #
+  # The threshold is "≥1 node" (Γc0>) so the single-node local dev run is
+  # demonstrable; a real multi-node DaemonSet would raise it to e.g. Γc‡2≥.
+  # narrator_id=1 routes the governor's verdict back to the audit sink so
+  # the correlated judgement joins graph/aggregator_alerts.jsonl.
+  - type: declarative
+    id: 2
+    priority: 1
+    config:
+      probe: quorum
+      genome: "Γc0>Γk∧→Cd;Γk0≡→Cg;Γp0>→Wp"
+      narrator_id: 1
+      calm_interval: 5
+      alert_interval: 1
