@@ -1,0 +1,20 @@
+# k8s_api_empty_cluster_decoy — APISERVER FRONT (k8s_api / K). DECOY.
+# Red Team counter-move vs the champion's node-count cheat (Kn≥→Cg detects
+# "apiserver down" via node count dropping to 0). A freshly-bootstrapped
+# cluster has the apiserver HEALTHY but zero nodes registered yet — so the
+# cheat false-positives here. Forces Blue to gate on api.healthy directly.
+name: k8s_api_empty_cluster_decoy
+domain: k8s_api
+ticks_total: 150
+phases:
+  - name: fresh_cluster_no_nodes
+    range: [0, 149]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 30
+      k8s.nodes.total: 0
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 2
+      k8s.deployments.degraded: 0
+      k8s.api.auth_present: 1
+    truth: null

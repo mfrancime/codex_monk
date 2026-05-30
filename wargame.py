@@ -117,6 +117,10 @@ FRONTS = {
         'ladder': [
             ['scenarios/k8s_api_down.yaml'],
             ['scenarios/k8s_api_down.yaml', 'scenarios/k8s_api_warnstorm_decoy.yaml'],
+            # Red escalation: empty-but-healthy cluster punishes the node-count
+            # cheat (Kn≥→Cg), forcing a gate on api.healthy directly.
+            ['scenarios/k8s_api_down.yaml', 'scenarios/k8s_api_warnstorm_decoy.yaml',
+             'scenarios/k8s_api_empty_cluster_decoy.yaml'],
         ],
     },
     'etcd': {
@@ -128,6 +132,11 @@ FRONTS = {
             ['scenarios/k8s_etcd_wobble.yaml', 'scenarios/k8s_etcd_splitbrain.yaml'],
             ['scenarios/k8s_etcd_wobble.yaml', 'scenarios/k8s_etcd_splitbrain.yaml',
              'scenarios/k8s_etcd_compaction_decoy.yaml'],
+            # Red escalation: node-flap with healthy latency punishes the
+            # not-ready/degraded cheat (KdKx→Cg→Wg), forcing real latency gating.
+            ['scenarios/k8s_etcd_wobble.yaml', 'scenarios/k8s_etcd_splitbrain.yaml',
+             'scenarios/k8s_etcd_compaction_decoy.yaml',
+             'scenarios/k8s_etcd_node_flap_decoy.yaml'],
         ],
     },
     'scheduler': {
@@ -139,6 +148,12 @@ FRONTS = {
             ['scenarios/k8s_sched_pileup.yaml', 'scenarios/k8s_sched_storm.yaml'],
             ['scenarios/k8s_sched_pileup.yaml', 'scenarios/k8s_sched_storm.yaml',
              'scenarios/k8s_sched_rollout_decoy.yaml'],
+            # Red escalation: nodes lost but pods rescheduled (degraded stays
+            # low) punishes the not-ready cheat (Kx→Cd), forcing pure degraded
+            # thresholds.
+            ['scenarios/k8s_sched_pileup.yaml', 'scenarios/k8s_sched_storm.yaml',
+             'scenarios/k8s_sched_rollout_decoy.yaml',
+             'scenarios/k8s_sched_nodeloss_decoy.yaml'],
         ],
     },
 }

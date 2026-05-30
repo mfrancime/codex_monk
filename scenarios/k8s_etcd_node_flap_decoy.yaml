@@ -1,0 +1,20 @@
+# k8s_etcd_node_flap_decoy — ETCD FRONT (k8s_api / K via latency). DECOY.
+# Counter-move vs the champion's not-ready/degraded cheat (KdKx→Cg→Wg). Here a
+# couple of worker nodes flap and some deployments go degraded, but etcd is
+# FINE — apiserver latency stays a healthy 30ms. That is a NODE problem, not an
+# etcd problem; the etcd front must stay silent. Forces real latency gating (Kl).
+name: k8s_etcd_node_flap_decoy
+domain: k8s_api
+ticks_total: 150
+phases:
+  - name: nodes_flap_etcd_fine
+    range: [0, 149]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 30
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 2
+      k8s.events.warnings_60s: 15
+      k8s.deployments.degraded: 6
+      k8s.api.auth_present: 1
+    truth: null
