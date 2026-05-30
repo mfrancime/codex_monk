@@ -24,7 +24,7 @@ swarms:
   # Cross-swarm: routes type-700 alerts through its gateway to evolver.
   - name: kernel
     include: swarms/kernel.yaml
-    state_prefix: "swarm.kernel."
+    state_prefix: "ker."
     fabric_path: "/dev/shm/codex.kernel.fabric"
     gateway:
       id: 9
@@ -43,7 +43,7 @@ swarms:
   # back across the gateway) is Phase B and deliberately out of scope here.
   - name: evolver
     include: swarms/evolver.yaml
-    state_prefix: "swarm.evolver."
+    state_prefix: "evo."
     fabric_path: "/dev/shm/codex.evolver.fabric"
     gateway:
       id: 9

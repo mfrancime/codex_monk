@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>CODEX_MONK · WAR ROOM</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body data-defcon="5">
+
+<header class="hud">
+  <div class="brand">
+    <span class="logo">▣</span>
+    <span class="name">CODEX_MONK</span>
+    <span class="sub">war room</span>
+  </div>
+  <div class="clock" id="clock">--:--:--</div>
+  <div class="defcon-banner">
+    <span class="lbl">DEFCON</span>
+    <span class="lvl" id="defcon-lvl">5</span>
+    <span class="state" id="defcon-state">NOMINAL</span>
+  </div>
+  <div class="status">
+    <span class="dot" id="conn-dot"></span>
+    <span id="conn-text">connecting…</span>
+  </div>
+</header>
+
+<main class="grid">
+
+  <!-- Control column (left) -->
+  <section class="panel ctrl">
+    <div class="panel-head"><span>SWARM CONTROL</span></div>
+    <ul class="config-list" id="config-list">
+      <li class="empty">loading…</li>
+    </ul>
+    <div class="panel-head"><span>RUNNING</span></div>
+    <ul class="proc-list" id="proc-list">
+      <li class="empty">none</li>
+    </ul>
+    <div class="panel-head"><span>PROBES</span></div>
+    <ul class="probe-list" id="probe-list"></ul>
+  </section>
+
+  <!-- Topology canvas (center) -->
+  <section class="panel topo">
+    <div class="panel-head">
+      <span>TOPOLOGY</span>
+      <span class="meta" id="topo-meta">discovering fabrics…</span>
+    </div>
+    <svg id="topo-svg" viewBox="0 0 1000 600"
+         preserveAspectRatio="xMidYMid meet"></svg>
+  </section>
+
+  <!-- Agent grid (right) -->
+  <section class="panel grid-panel">
+    <div class="panel-head">
+      <span>AGENTS</span>
+      <span class="meta" id="agent-meta">0</span>
+    </div>
+    <div class="grid-wrap">
+      <table class="agent-grid">
+        <thead><tr>
+          <th>SWARM</th>
+          <th>ID</th>
+          <th>ROLE</th>
+          <th>STATE</th>
+          <th>HB</th>
+          <th>SEV</th>
+          <th>CODE</th>
+        </tr></thead>
+        <tbody id="agent-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Log tail (bottom-left) -->
+  <section class="panel log">
+    <div class="panel-head">
+      <span>FABRIC LOG</span>
+      <select id="log-fabric"></select>
+    </div>
+    <div class="log-wrap" id="log-tbody"></div>
+  </section>
+
+  <!-- Alert timeline (bottom-right) -->
+  <section class="panel alerts">
+    <div class="panel-head">
+      <span>ALERTS</span>
+      <span class="meta" id="alert-meta">0</span>
+    </div>
+    <div class="alert-wrap" id="alert-tbody"></div>
+  </section>
+
+</main>
+
+<!-- Agent detail drawer (opens on click) -->
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <span id="drawer-title">AGENT</span>
+    <button id="drawer-close" type="button">×</button>
+  </div>
+  <div class="drawer-body" id="drawer-body">
+    <div class="dr-row">
+      <span class="dr-lbl">FABRIC</span>
+      <span id="dr-fabric"></span>
+    </div>
+    <div class="dr-row">
+      <span class="dr-lbl">ROLE</span>
+      <span id="dr-role"></span>
+    </div>
+    <div class="dr-row">
+      <span class="dr-lbl">STATE</span>
+      <span id="dr-state"></span>
+    </div>
+    <div class="dr-row">
+      <span class="dr-lbl">SEV</span>
+      <span id="dr-sev"></span>
+    </div>
+    <div class="dr-row">
+      <span class="dr-lbl">PID</span>
+      <span id="dr-pid"></span>
+    </div>
+    <div class="dr-row">
+      <span class="dr-lbl">HB AGE</span>
+      <span id="dr-hb"></span>
+    </div>
+    <div class="dr-section">AGENT STATE</div>
+    <table class="dr-vars" id="dr-vars"></table>
+    <div class="dr-section">CURRENT GENOME</div>
+    <pre id="dr-genome" class="dr-genome">—</pre>
+    <div class="dr-section">PROPOSE NEW GENOME</div>
+    <textarea id="dr-propose" class="dr-textarea" rows="3"
+              placeholder="paste new genome…"></textarea>
+    <button id="dr-propose-btn" class="big-btn">PROPOSE</button>
+    <div id="dr-result" class="dr-result"></div>
+    <div class="dr-section">PROBE FRAME</div>
+    <pre id="dr-frame" class="dr-frame">—</pre>
+  </div>
+</aside>
+
+<div class="klaxon" id="klaxon"></div>
+
+<script src="/app.js"></script>
+</body>
+</html>

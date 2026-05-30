@@ -32,7 +32,7 @@ swarms:
 
   - name: vajrayana_monitor
     include: swarms/vajrayana_monitor.yaml
-    state_prefix: "swarm.vajrayana_monitor."
+    state_prefix: "vaj."
     fabric_path: "/dev/shm/codex.vajrayana_monitor.fabric"
     gateway:
       id: 9
