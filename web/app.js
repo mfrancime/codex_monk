@@ -768,6 +768,8 @@ function evoWarBanner(w) {
   const bf = w.battlefield || {};
   const armies = w.armies || {};
   const phaseText = ({
+    preempting: `🔮 RED telegraphs <b>${cur.front}</b> — ${cur.attack}… Blue reads the signs`,
+    preempted: `🔮 BLUE PRE-EMPTED <b>${cur.front}</b> — breach PREVENTED${cur.latency != null ? ' (' + cur.latency + 's)' : ''}`,
     attacking: `🔴 RED storms <b>${cur.front}</b> — ${cur.attack}`,
     blocked: `🔵 BLUE HELD <b>${cur.front}</b> · ${cur.verdict || ''}${cur.latency != null ? ' in ' + cur.latency + 's' : ''}`,
     breached: `🔴 RED BREACHED <b>${cur.front}</b> — ground lost`,
@@ -789,7 +791,7 @@ function evoWarBanner(w) {
     </div>
     <div class="war-gov">${govTxt}</div>
     <div class="war-phase ${phase}">${phaseText}</div>
-    <div class="war-armies">🔵 holds <b>${blueHeld}</b>/${Object.keys(bf).length} fronts · 🔴 has taken <b>${redTook}</b></div>
+    <div class="war-armies">🔵 holds <b>${blueHeld}</b>/${Object.keys(bf).length} · 🔴 took <b>${redTook}</b> · 🔮 <b>${s.prevented || 0}</b> breaches PREVENTED <span class="war-anticip">(negative MTTR)</span></div>
     ${w.strategy ? `<div class="war-strat">🔴 ${w.strategy}</div>` : ''}
     ${summary}
     <div class="war-log">${log}</div>
@@ -803,6 +805,7 @@ function evoWarCells(w) {
   const grid = $('evo-war-bf');
   if (!grid) return;
   const bf = (w && w.battlefield) || {};
+  const cur = (w && w.current) || {};
   const fronts = Object.keys(bf).sort((a, b) => BF_ORDER.indexOf(a) - BF_ORDER.indexOf(b));
   if (!fronts.length) { grid.innerHTML = ''; _bfCells.clear(); return; }
   fronts.forEach((f) => {
@@ -816,13 +819,16 @@ function evoWarCells(w) {
       _bfCells.set(f, cell);
       grid.appendChild(cell);
     }
-    const atk = c.under_attack && w.running ? ' under-attack' : '';
-    cell.className = 'bf-cell ' + c.holder + atk + (WAR.selected === f ? ' selected' : '');
-    cell.children[0].textContent = f + (c.defense ? ' 🛡️' + c.defense : '');
+    let phaseCls = '';
+    if (c.under_attack && w.running) {
+      phaseCls = ' ' + ({ preempting: 'preempting', preempted: 'preempted' }[cur.phase] || 'under-attack');
+    }
+    cell.className = 'bf-cell ' + c.holder + phaseCls + (WAR.selected === f ? ' selected' : '');
+    cell.children[0].textContent = (c.telegraphs ? '🔮 ' : '') + f + (c.defense ? ' 🛡️' + c.defense : '');
     const bar = cell.children[1].firstChild;
     bar.style.width = c.health + '%';
     bar.className = c.holder;
-    cell.children[2].textContent = c.holder + ' · ' + c.health + 'hp';
+    cell.children[2].textContent = c.holder + ' · ' + c.health + 'hp' + (c.preempts ? ' · 🔮' + c.preempts : '');
   });
 }
 
@@ -844,7 +850,7 @@ function evoWarSelect(front) {
     <div class="bf-detail-head"><span>🔍 ${front} — <b class="${c.holder}">${(c.holder || '').toUpperCase()}</b> · ${c.health}hp</span>
       <button class="bf-close" type="button">×</button></div>
     <div class="bf-row"><span class="bf-lbl blue">🔵 DEFENDER</span> <code class="bf-gene">${evoGenomeHTML(bu.genome || '')}</code></div>
-    <div class="bf-row"><span class="bf-lbl">status</span> ${c.verdict} · holds ${c.blocks} · breaches ${c.breaches} · 🛡️ reinforcement +${c.defense || 0}s</div>
+    <div class="bf-row"><span class="bf-lbl">status</span> ${c.verdict} · holds ${c.blocks} · breaches ${c.breaches} · 🛡️ +${c.defense || 0}s · 🔮 ${c.preempts || 0} pre-empted</div>
     <div class="bf-row"><span class="bf-lbl red">🔴 ATTACKER</span> ${atk}${ru.genome ? ' · <code class="bf-gene">' + ru.genome + '</code>' : ''}</div>
     <div class="bf-inject">
       <input class="bf-genome-in" id="bf-gin" placeholder="custom genome for ${front}…" spellcheck="false">

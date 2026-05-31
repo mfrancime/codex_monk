@@ -57,6 +57,12 @@ RED_FABRIC = '/dev/shm/codex.red.fabric'
 ATTACK_DNA = {'pods': 'Πo↑Πm↑→breach', 'nodes': 'Ωr↑→breach',
               'apiserver': 'Ka↓→breach', 'scheduler': 'Kd↑→breach'}
 
+# 🔮 ANTICIPATION — fronts that TELEGRAPH (a leading indicator rises before the
+# breach). If a Blue unit detects the precursor it PRE-EMPTS: the breach never
+# lands (prevention = negative MTTR), scored above a reactive block. Only fronts
+# whose champion gates on a continuous signal can pre-empt; the rest are sudden.
+PRECURSOR = {'pods': 'pods_pre', 'scheduler': 'scheduler_pre'}
+
 
 class RedSwarm:
     """Red army as a live fabric of attacker units (no new agent class — the war
@@ -212,9 +218,9 @@ def main():
     GEN = {f: g for f, _, _, _, g in PLAYBOOK}
     AID = {f: aid for f, aid, _, _, _ in PLAYBOOK}
     fronts = {f: {'blocks': 0, 'breaches': 0, 'last': '—', 'defense': 0,
-                  'health': 100, 'verdict': 'OK', 'latency': None}
+                  'health': 100, 'verdict': 'OK', 'latency': None, 'preempts': 0}
               for f, _, _, _, _ in PLAYBOOK}
-    score = {'blue': 0, 'red': 0}
+    score = {'blue': 0, 'red': 0, 'prevented': 0}
     log = []
     turn = 0
 
@@ -234,14 +240,15 @@ def main():
         return {f: {'holder': _holder(v['health']), 'health': v['health'],
                     'under_attack': (f == active), 'verdict': v['verdict'],
                     'defense': v['defense'], 'blocks': v['blocks'],
-                    'breaches': v['breaches'], 'latency': v['latency']}
+                    'breaches': v['breaches'], 'latency': v['latency'],
+                    'preempts': v['preempts'], 'telegraphs': (f in PRECURSOR)}
                 for f, v in fronts.items()}
 
     def armies(strategy=''):
         blue_units = [{'front': f, 'aid': AID[f], 'genome': GEN[f],
                        'health': v['health'], 'verdict': v['verdict'],
                        'blocks': v['blocks'], 'breaches': v['breaches'],
-                       'holder': _holder(v['health'])}
+                       'preempts': v['preempts'], 'holder': _holder(v['health'])}
                       for f, v in fronts.items()]
         red_units = [{'front': f, 'target': f, 'genome': ATTACK_DNA.get(f, '?'),
                       'breaches': v['breaches'], 'pressure': v['defense']}
@@ -279,6 +286,42 @@ def main():
         window = min(12, base + defense)
         strat = (f'wave {wave + 1}: base squeeze {base}s · storming {front}'
                  + (f' · 🛡️ Blue reinforced +{defense}s' if defense else ''))
+
+        # 🔮 ANTICIPATION — if this front telegraphs, Red shows the leading edge
+        # first and Blue may PRE-EMPT (detect the precursor → breach prevented).
+        if front in PRECURSOR:
+            _r('beat')
+            _r('attack', front, label)
+            snap({'front': front, 'attack': '⚠ ' + label + ' brewing', 'phase': 'preempting'},
+                 'preempting', strategy=strat + ' · 🔮 telegraphed', active=front)
+            _inject(PRECURSOR[front])
+            t0 = time.time()
+            psev = pcode = None
+            plat = None
+            while time.time() - t0 < max(5, base + 1):
+                time.sleep(0.8)
+                psev, pcode = _read_state(FABRIC, aid)
+                if psev not in (None, 'OK') and pcode == want_code:
+                    plat = round(time.time() - t0, 1)
+                    break
+            if plat is not None:                       # 🔵 Blue saw it coming
+                score['blue'] += 4
+                score['prevented'] += 1
+                fronts[front]['blocks'] += 1
+                fronts[front]['preempts'] += 1
+                fronts[front]['last'] = 'PRE-EMPT'
+                fronts[front]['health'] = min(100, fronts[front]['health'] + 10)
+                fronts[front]['verdict'] = f'{psev}:{pcode}'
+                fronts[front]['latency'] = plat
+                result = f'🔮 PRE-EMPTED {front} +4 — breach prevented ({psev} in {plat}s)'
+                log.append({'turn': turn, 'front': front, 'attack': label, 'result': result})
+                snap({'front': front, 'attack': label, 'phase': 'preempted',
+                      'verdict': f'{psev}:{pcode}', 'latency': plat}, 'preempted',
+                     strategy=strat, active=front)
+                _inject('healthy')
+                _r('idle', front)
+                time.sleep(max(1.5, base * 0.4))
+                continue                               # breach never lands
 
         # 🔴 Red strikes — its attacker unit goes live in codex.red.fabric
         _r('beat')

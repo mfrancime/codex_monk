@@ -76,6 +76,14 @@ STATES = {
     'nodes':     (_healthy_pods, dict(not_ready=1)),    # one kubelet NotReady
     'apiserver': (_healthy_pods, dict(healthy=False)),  # control-plane down
     'scheduler': (_healthy_pods, dict(degraded=6, warnings=12)),  # pods can't schedule
+    # ── PRECURSORS: the leading edge BEFORE the breach (anticipation layer) ──
+    # memory climbing toward the limit (mem_pct 88%) but no OOMKill yet — the
+    # tell a mem_pct-gating champion can pre-empt on.
+    'pods_pre':  (lambda: [dict(current=1_760_000_000, max=2_000_000_000,
+                                some=4.0, full=1.0, oom=0)] + _healthy_pods()[1:],
+                  dict()),
+    # deployments degrading (4) on the way to the unschedulable storm (12).
+    'scheduler_pre': (_healthy_pods, dict(degraded=4, warnings=8)),
 }
 
 

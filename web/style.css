@@ -754,3 +754,11 @@ body[data-defcon="1"] .klaxon {
 .bf-hint { font-size:9px; color:var(--text-dim); font-style:italic; }
 .bf-result { font-size:10px; margin-top:4px; min-height:12px; }
 .bf-result.ok { color:var(--green); } .bf-result.err { color:var(--red-glow); }
+
+/* 🔮 anticipation layer — pre-empt phases */
+.war-phase.preempting { color:var(--info); }
+.war-phase.preempted { color:var(--green); font-weight:700; animation:lbpulse 1.2s; }
+.war-anticip { font-size:8px; color:var(--text-dim); }
+.bf-cell.preempting { border-color:var(--info); box-shadow:0 0 10px -2px var(--info); animation:bfpre .8s infinite; }
+.bf-cell.preempted { border-color:var(--green); box-shadow:0 0 12px -1px var(--green-dim); }
+@keyframes bfpre { 0%,100%{box-shadow:0 0 4px -2px var(--info);} 50%{box-shadow:0 0 12px 0 var(--info);} }
