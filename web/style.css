@@ -709,3 +709,7 @@ body[data-defcon="1"] .klaxon {
 .war-front.fortified { border-color:var(--info); box-shadow:0 0 6px -2px var(--info); }
 .war-summary { text-align:center; font-size:11px; color:var(--green); margin:6px 0 2px; padding:5px;
   border:1px solid var(--green-soft); border-radius:6px; background:rgba(10,20,10,.4); }
+
+/* governor live-verdict chip */
+.force-chip.gov { color:var(--info); border-color:#1a3a5a; }
+.force-chip.gov.alert { color:var(--amber); border-color:#4a3a0e; animation:lbflash 1s infinite; }

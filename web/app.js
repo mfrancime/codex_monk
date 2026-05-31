@@ -585,6 +585,7 @@ function evoForces() {
   if (!sw.length) return '<div class="evo-forces"><div class="evo-forces-head">⚙️ LIVE FORCES — no fabrics online</div></div>';
   const roles = { gateway: 0, governor: 0, mutator: 0, probe: 0, sink: 0 };
   const fabrics = [];
+  let govVerdict = '';
   sw.forEach((s) => {
     const short = s.swarm_name || s.path.split('/').pop()
       .replace(/^codex\./, '').replace(/\.fabric$/, '');
@@ -592,21 +593,26 @@ function evoForces() {
     if (/k8s_deployed/.test(s.path)) purpose = '🔵 BLUE — champions as live DNA';
     else if (/evolver/.test(s.path)) purpose = '🧬 live evolver — mutates DNA';
     else if (/kernel/.test(s.path)) purpose = '📡 sensor swarm';
-    else if (/aggregat/.test(s.path)) purpose = '🛡️ governor — cluster oversight';
+    else if (/aggregat/.test(s.path)) purpose = '🛡️ GOVERNOR — cluster oversight';
     (s.agents || []).forEach((a) => {
-      if (a.probe === 'quorum') roles.governor++;
-      else if (roles[a.role] !== undefined) roles[a.role]++;
+      if (a.probe === 'quorum') {
+        roles.governor++;
+        if (a.sev) govVerdict = a.sev + (a.code && a.code !== 'OK' ? ':' + a.code : '');
+      } else if (roles[a.role] !== undefined) roles[a.role]++;
     });
     fabrics.push(`<span class="force-fab"><b>${short}</b> · ${purpose}</span>`);
   });
   const chip = (icon, label, n) => n
     ? `<span class="force-chip" title="${label}">${icon} ${label} ×${n}</span>`
     : `<span class="force-chip off" title="${label} — not running">${icon} ${label} ×0</span>`;
+  const govChip = roles.governor
+    ? `<span class="force-chip gov ${govVerdict && govVerdict !== 'OK' ? 'alert' : ''}" title="the cluster governor's live verdict">🛡️ governor ⟨${govVerdict || '…'}⟩</span>`
+    : `<span class="force-chip off" title="governor not booted — run ./deploy_governor.sh">🛡️ governor ×0</span>`;
   return `<div class="evo-forces">
     <div class="evo-forces-head">⚙️ LIVE FORCES (running fabrics)</div>
     <div class="force-roles">
       ${chip('🚪', 'gateway', roles.gateway)}
-      ${chip('🛡️', 'governor', roles.governor)}
+      ${govChip}
       ${chip('🧬', 'mutator', roles.mutator)}
       ${chip('📡', 'probe', roles.probe)}
       ${chip('🗄️', 'sink', roles.sink)}
