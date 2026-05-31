@@ -84,6 +84,13 @@ STATES = {
                   dict()),
     # deployments degrading (4) on the way to the unschedulable storm (12).
     'scheduler_pre': (_healthy_pods, dict(degraded=4, warnings=8)),
+    # ── STEALTH: just UNDER the detector's threshold — evades a champion that
+    # gates ≥83 / >2, yet still erodes the front. Red's path to win; the only
+    # counter is a tighter genome (which risks decoy false-positives).
+    'pods_stealth': (lambda: [dict(current=1_640_000_000, max=2_000_000_000,
+                                   some=4.0, full=0.5, oom=0)] + _healthy_pods()[1:],
+                     dict()),                           # mem_pct 82 (< 83)
+    'scheduler_stealth': (_healthy_pods, dict(degraded=2, warnings=5)),  # degraded 2 (not > 2)
 }
 
 

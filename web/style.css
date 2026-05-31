@@ -762,3 +762,7 @@ body[data-defcon="1"] .klaxon {
 .bf-cell.preempting { border-color:var(--info); box-shadow:0 0 10px -2px var(--info); animation:bfpre .8s infinite; }
 .bf-cell.preempted { border-color:var(--green); box-shadow:0 0 12px -1px var(--green-dim); }
 @keyframes bfpre { 0%,100%{box-shadow:0 0 4px -2px var(--info);} 50%{box-shadow:0 0 12px 0 var(--info);} }
+
+/* 🥷 stealth — Red under the radar */
+.war-phase.stealth, .war-phase.stealth_hit { color:var(--red-glow); font-style:italic; }
+.bf-cell.stealth { border-color:#6a1a1a; box-shadow:0 0 8px -3px var(--red); opacity:.82; }

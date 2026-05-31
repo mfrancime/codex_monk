@@ -63,6 +63,12 @@ ATTACK_DNA = {'pods': 'Πo↑Πm↑→breach', 'nodes': 'Ωr↑→breach',
 # whose champion gates on a continuous signal can pre-empt; the rest are sudden.
 PRECURSOR = {'pods': 'pods_pre', 'scheduler': 'scheduler_pre'}
 
+# 🥷 STEALTH — Red infiltrates UNDER Blue's detection threshold (sub-threshold
+# erosion). Evades a default champion entirely; Blue can only catch it by gating
+# TIGHTER (the user's intervention), at the risk of decoy false-positives. Red's
+# real path to win. Used more as the war drags on (escalating cunning).
+STEALTH = {'pods': 'pods_stealth', 'scheduler': 'scheduler_stealth'}
+
 
 class RedSwarm:
     """Red army as a live fabric of attacker units (no new agent class — the war
@@ -176,12 +182,15 @@ def _holder(health):
 
 
 def _pick_target(fronts, rng):
-    """Red presses the SOFTEST front (most net breaches, LOW reinforcement,
-    LOW health), else feints — and steers around reinforced fronts."""
-    if rng.random() < 0.70:
-        return max(PLAYBOOK, key=lambda p:
-                   fronts[p[0]]['breaches'] - fronts[p[0]]['defense'] * 0.9
-                   - fronts[p[0]]['health'] * 0.02)
+    """Red presses the SOFTEST front (breaches + infiltrations, low reinforcement,
+    low health) — but ABANDONS a front it's already taken to go take the next,
+    so the assault spreads instead of overkilling one corpse."""
+    if rng.random() < 0.72:
+        def soft(p):
+            v = fronts[p[0]]
+            taken = -60 if v['health'] < 25 else -v['health'] * 0.02
+            return v['breaches'] + v['stealth'] * 0.6 - v['defense'] * 0.9 + taken
+        return max(PLAYBOOK, key=soft)
     return rng.choice(PLAYBOOK)
 
 
@@ -218,9 +227,10 @@ def main():
     GEN = {f: g for f, _, _, _, g in PLAYBOOK}
     AID = {f: aid for f, aid, _, _, _ in PLAYBOOK}
     fronts = {f: {'blocks': 0, 'breaches': 0, 'last': '—', 'defense': 0,
-                  'health': 100, 'verdict': 'OK', 'latency': None, 'preempts': 0}
+                  'health': 100, 'verdict': 'OK', 'latency': None, 'preempts': 0,
+                  'stealth': 0}
               for f, _, _, _, _ in PLAYBOOK}
-    score = {'blue': 0, 'red': 0, 'prevented': 0}
+    score = {'blue': 0, 'red': 0, 'prevented': 0, 'infiltrated': 0}
     log = []
     turn = 0
 
@@ -241,7 +251,8 @@ def main():
                     'under_attack': (f == active), 'verdict': v['verdict'],
                     'defense': v['defense'], 'blocks': v['blocks'],
                     'breaches': v['breaches'], 'latency': v['latency'],
-                    'preempts': v['preempts'], 'telegraphs': (f in PRECURSOR)}
+                    'preempts': v['preempts'], 'telegraphs': (f in PRECURSOR),
+                    'stealth': v['stealth']}
                 for f, v in fronts.items()}
 
     def armies(strategy=''):
@@ -259,7 +270,8 @@ def main():
                      'held': sum(1 for v in fronts.values() if v['health'] > 66)},
             'red': {'name': 'RED — chaos engineers', 'units': red_units,
                     'strategy': strategy,
-                    'taken': sum(1 for v in fronts.values() if v['health'] < 34)},
+                    'taken': sum(1 for v in fronts.values() if v['health'] < 34),
+                    'infiltrations': sum(v['stealth'] for v in fronts.values())},
         }
 
     def snap(cur, phase, strategy='', active=None):
@@ -286,6 +298,45 @@ def main():
         window = min(12, base + defense)
         strat = (f'wave {wave + 1}: base squeeze {base}s · storming {front}'
                  + (f' · 🛡️ Blue reinforced +{defense}s' if defense else ''))
+
+        # 🥷 STEALTH — more likely as the war drags on. Red slips UNDER the
+        # detector's threshold for silent erosion. Only a tighter genome catches it.
+        if front in STEALTH and rng.random() < min(0.75, 0.2 * (wave + 1)):
+            _r('beat')
+            _r('attack', front, 'stealth infiltration')
+            snap({'front': front, 'attack': 'going dark', 'phase': 'stealth'},
+                 'stealth', strategy=strat + ' · 🥷 sub-threshold', active=front)
+            _inject(STEALTH[front])
+            caught = False
+            ssev = scode = None
+            t0 = time.time()
+            while time.time() - t0 < max(4, base):
+                time.sleep(0.8)
+                ssev, scode = _read_state(FABRIC, aid)
+                if ssev not in (None, 'OK') and scode == want_code:
+                    caught = True
+                    break
+            if caught:                                  # a tight genome saw it
+                score['blue'] += 3
+                fronts[front]['blocks'] += 1
+                fronts[front]['last'] = 'CAUGHT'
+                fronts[front]['verdict'] = f'{ssev}:{scode}'
+                result, phase = f'🔵 CAUGHT a stealth attack on {front}! +3', 'blocked'
+            else:                                       # slipped under the radar
+                score['red'] += 3
+                score['infiltrated'] += 1
+                fronts[front]['stealth'] += 1
+                fronts[front]['last'] = 'STEALTH'
+                fronts[front]['health'] = max(0, fronts[front]['health'] - 17)
+                fronts[front]['verdict'] = 'undetected'
+                result, phase = f'🥷 RED INFILTRATED {front} +2 — silent erosion', 'stealth_hit'
+            log.append({'turn': turn, 'front': front, 'attack': 'stealth', 'result': result})
+            snap({'front': front, 'attack': 'infiltration', 'phase': phase,
+                  'verdict': fronts[front]['verdict']}, phase, strategy=strat, active=front)
+            _inject('healthy')
+            _r('idle', front)
+            time.sleep(max(1.5, base * 0.4))
+            continue
 
         # 🔮 ANTICIPATION — if this front telegraphs, Red shows the leading edge
         # first and Blue may PRE-EMPT (detect the precursor → breach prevented).
@@ -374,18 +425,28 @@ def main():
 
     _inject('healthy')
     _r('beat')
-    winner = 'BLUE' if score['blue'] > score['red'] else (
-        'RED' if score['red'] > score['blue'] else 'DRAW')
-    mvp = max(fronts, key=lambda f: fronts[f]['blocks'])
-    fell = [f for f, v in fronts.items() if v['health'] < 34]
+    # Victory is TERRITORIAL: who holds more of the cluster at the end. Stealth
+    # erosion can hand Red the ground even while Blue leads on points. Ties break
+    # on score (raw blocks/prevents vs breaches/infiltrations).
+    blue_holds = sum(1 for v in fronts.values() if v['health'] >= 50)
+    red_holds = len(fronts) - blue_holds
+    if red_holds > blue_holds:
+        winner = 'RED'
+    elif blue_holds > red_holds:
+        winner = 'BLUE'
+    else:
+        winner = 'BLUE' if score['blue'] >= score['red'] else 'RED'
+    mvp = max(fronts, key=lambda f: fronts[f]['blocks'] + fronts[f]['preempts'])
+    fell = [f for f, v in fronts.items() if v['health'] < 50]
     _write({'running': False, 'turn': turn, 'score': score, 'fronts': fronts,
             'current': {'front': '—', 'attack': 'war over', 'phase': 'calm'},
             'wave': turn // WAVE_TURNS + 1, 'battlefield': battlefield(),
             'armies': armies(), 'governor': _governor(),
             'log': log[-24:], 'duration_s': duration, 'ends_at': time.time(),
             'winner': winner, 'mvp': mvp,
-            'summary': (f'🏅 MVP defender: {mvp} ({fronts[mvp]["blocks"]} holds) · '
-                        + (f'fronts fallen: {", ".join(fell)}' if fell
+            'summary': (f'🗺️ {blue_holds}/{len(fronts)} fronts held by Blue · '
+                        f'🏅 MVP: {mvp} ({fronts[mvp]["blocks"] + fronts[mvp]["preempts"]}) · '
+                        + (f'🥷 Red took: {", ".join(fell)}' if fell
                            else 'Blue held the whole cluster'))})
 
 
