@@ -333,8 +333,49 @@
       if (bf && hubs[bf] && w.battlefield) {
         ensureFrontBars(hubs[bf], Object.keys(w.battlefield));
         updateFrontBars(hubs[bf], w.battlefield);
+        buildTethers(hubs[bf]);            // link each defender to its ground
       }
     }
+  }
+
+  // 🔗 TETHERS — a faint line from each Blue defender unit to the territory bar
+  // it guards, colored by the front's holder. Makes the defensive assignment
+  // legible (which soldier holds which ground). 4 lines, endpoints refreshed per
+  // frame from world positions — light.
+  function buildTethers(blueRec) {
+    if (!blueRec || !blueRec._frontBars || !warState) return;
+    if (!blueRec._tethers) blueRec._tethers = {};
+    const units = (warState.armies && warState.armies.blue
+                   && warState.armies.blue.units) || [];
+    units.forEach((u) => {
+      if (blueRec._tethers[u.front]) return;
+      const fb = blueRec._frontBars[u.front];
+      const mesh = blueRec.agents[u.aid];
+      if (!fb || !mesh) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+        color: 0x5fb8ff, transparent: true, opacity: 0.3 }));
+      scene.add(line);
+      blueRec._tethers[u.front] = { line, mesh, fb };
+      window.__war3dTethers = (window.__war3dTethers || 0) + 1;
+    });
+  }
+  function updateTethers() {
+    const blue = warState && hubs[warState.blue_fabric];
+    if (!blue || !blue._tethers) return;
+    const a = new THREE.Vector3(), bv = new THREE.Vector3();
+    Object.values(blue._tethers).forEach((t) => {
+      if (!t.mesh.parent) { t.line.visible = false; return; }  // unit despawned
+      t.line.visible = true;
+      t.mesh.getWorldPosition(a);
+      t.fb.holder.getWorldPosition(bv);
+      const pos = t.line.geometry.attributes.position;
+      pos.array[0] = a.x; pos.array[1] = a.y; pos.array[2] = a.z;
+      pos.array[3] = bv.x; pos.array[4] = bv.y; pos.array[5] = bv.z;
+      pos.needsUpdate = true;
+      t.line.material.color.copy(t.fb.bar.material.color);       // match the ground
+    });
   }
 
   // world position of a Blue front's territory bar (beam aim point), or null
@@ -516,6 +557,7 @@
 
     // ⚔ drive the battle (projectiles, sphere flashes) from the war state
     stepBattle(dt);
+    updateTethers();          // refresh defender→territory link endpoints
 
     // hub breathing + shell spin + agent orbits
     Object.values(hubs).forEach((rec) => {
