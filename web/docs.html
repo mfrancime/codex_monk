@@ -75,6 +75,11 @@
 
     .doc footer { margin-top: 40px; color: var(--text-dim); font-size: 11px;
       border-top: 1px solid var(--green-soft); padding-top: 14px; }
+
+    /* embedded in the war-room docs drawer: drop the page chrome, tighten up */
+    body.embedded .doc-hud { display: none; }
+    body.embedded .doc { max-width: none; padding: 16px 18px 60px; }
+    body.embedded { background: transparent; }
   </style>
 </head>
 <body data-defcon="5">
@@ -203,5 +208,12 @@
   </footer>
 
 </div>
+<script>
+  // when shown inside the war-room's collapsible drawer (iframe / ?embed=1),
+  // hide the standalone page header + back link so it reads as a panel.
+  if (window.self !== window.top || /[?&]embed/.test(location.search)) {
+    document.body.classList.add('embedded');
+  }
+</script>
 </body>
 </html>

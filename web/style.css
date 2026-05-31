@@ -921,3 +921,36 @@ body[data-defcon="1"] .klaxon {
 .lb-live.ok   { color:#5fb8ff; border-color:#1d3a55; }
 .lb-live.bad  { color:var(--red-glow); border-color:#5a1414; background:rgba(60,14,14,.25); }
 .lb-live.none { color:var(--text-dim); opacity:.5; }
+
+/* ── ? WHAT IS THIS — collapsible docs side panel ───────────────────────────
+   Slides in from the left over the (now left-biased) scene; embeds /docs.html
+   so the docs stay one source. Collapsed by default; ESC or × to close. */
+.docs-drawer {
+  position: fixed; left: 0; top: 0; bottom: 0; width: min(480px, 94vw);
+  z-index: 65; display: flex; flex-direction: column;
+  border-right: 1px solid var(--green-soft);
+  border-radius: 0 8px 8px 0;
+  box-shadow: 8px 0 40px -12px rgba(0,0,0,.8), inset 0 0 60px -50px var(--green);
+  transform: translateX(0); transition: transform .26s ease, opacity .26s ease;
+}
+.docs-drawer[aria-hidden="true"] {
+  transform: translateX(-104%); opacity: 0; pointer-events: none;
+}
+.docs-head {
+  display: flex; align-items: center; gap: 10px; flex: 0 0 auto;
+  padding: 11px 14px; border-bottom: 1px solid var(--green-soft);
+}
+.docs-title { color: var(--green); font-weight: 700; letter-spacing: 2px;
+  margin-right: auto; text-shadow: 0 0 8px var(--green-soft); }
+.docs-pop, .docs-close {
+  color: var(--text-dim); text-decoration: none; cursor: pointer;
+  border: 1px solid var(--green-soft); border-radius: 4px;
+  background: transparent; font-family: var(--mono); line-height: 1;
+}
+.docs-pop { padding: 4px 8px; font-size: 13px; }
+.docs-close { padding: 3px 9px; font-size: 16px; }
+.docs-pop:hover, .docs-close:hover { background: var(--panel-hi); color: var(--green); }
+.docs-frame { flex: 1 1 auto; width: 100%; border: 0; background: transparent; }
+/* the toggle reads as active while the panel is open */
+.hud-link.active { background: var(--panel-hi); color: var(--green);
+  border-color: var(--green); }

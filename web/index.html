@@ -32,7 +32,7 @@
   </div>
   <div class="topo-readout"><span id="topo-meta">discovering fabrics…</span></div>
   <button class="hud-link evo-link" id="evo-toggle" title="Kubernetes wargame — genome evolution">⧬ WARGAME</button>
-  <a class="hud-link" href="/docs.html" title="What is this?">? WHAT IS THIS</a>
+  <button class="hud-link" id="docs-toggle" type="button" title="What is this?">? WHAT IS THIS</button>
   <div class="status">
     <span class="dot" id="conn-dot"></span>
     <span id="conn-text">connecting…</span>
@@ -204,6 +204,16 @@
     </div>
   </div>
 </div>
+
+<!-- ? WHAT IS THIS — collapsible docs side panel (embeds /docs.html, single source) -->
+<aside class="docs-drawer glass" id="docs-drawer" aria-hidden="true">
+  <div class="docs-head">
+    <span class="docs-title">▣ WHAT IS THIS</span>
+    <a class="docs-pop" href="/docs.html" target="_blank" title="open full page">⇱</a>
+    <button class="docs-close" id="docs-close" type="button" title="collapse">×</button>
+  </div>
+  <iframe class="docs-frame" id="docs-frame" title="What is this — codex_monk docs"></iframe>
+</aside>
 
 <div class="klaxon" id="klaxon"></div>
 

@@ -1153,6 +1153,25 @@ $('evo-war-detail').addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EVO.open) evoToggle(false); });
 
+// ── ? WHAT IS THIS — collapsible docs side panel (lazy-embeds /docs.html) ────
+(() => {
+  const drawer = $('docs-drawer'), frame = $('docs-frame'), toggle = $('docs-toggle');
+  if (!drawer || !toggle) return;
+  let loaded = false;
+  const isOpen = () => drawer.getAttribute('aria-hidden') === 'false';
+  function setDocs(open) {
+    if (open && !loaded) { frame.src = '/docs.html?embed=1'; loaded = true; }
+    drawer.setAttribute('aria-hidden', String(!open));
+    toggle.classList.toggle('active', open);
+  }
+  toggle.addEventListener('click', () => setDocs(!isOpen()));
+  const close = $('docs-close');
+  if (close) close.addEventListener('click', () => setDocs(false));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && isOpen()) setDocs(false);
+  });
+})();
+
 // ── SCORE — gamified uptime: climbs while all-green, streak resets on crit ─
 let _score = 0, _streak = 1, _greenSecs = 0;
 setInterval(() => {
