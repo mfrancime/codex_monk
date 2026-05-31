@@ -607,9 +607,20 @@
     composer.render();
   }
 
+  // Lens-shift the camera so the cluster renders LEFT of screen center, clear of
+  // the right-hand CYBERWAR CONSOLE / WARGAME panels (which otherwise cover the
+  // Blue army). Pure projection offset — no geometry moved, auto-rotate stays
+  // centered on the cluster. Positive offsetX pushes rendered content left.
+  function applyViewOffset() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const off = Math.min(380, Math.round(W * 0.17));   // ~17% of width, capped
+    camera.setViewOffset(W, H, off, 0, W, H);
+  }
+
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    applyViewOffset();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
     bloom.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
@@ -693,6 +704,10 @@
     renderer.domElement.addEventListener('click', handleClick);
     renderer.domElement.addEventListener('pointermove', handleHover);
     window.addEventListener('resize', onResize);
+
+    applyViewOffset();          // bias the stage left, away from the right panels
+    // test hook: NDC-x of the world origin (cluster center) — negative = shifted left
+    window.__war3dCenterNDC = () => new THREE.Vector3(0, 0, 0).project(camera).x;
 
     animate();
     window.__war3dReady = true;
