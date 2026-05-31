@@ -1,0 +1,36 @@
+# k8s_etcd_wobble — ETCD FRONT (k8s_api / K via latency).  "Quorum Wobble"
+#
+# etcd is the cluster's brain; when it slows, every write stalls. Red Team move:
+# a flaky disk drags etcd's fsync, so apiserver round-trips (the proxy we can
+# see: k8s.api.latency_ms) creep from a healthy 20ms to 1500ms — the apiserver
+# still answers /healthz, so this is a WARN GATE_DOWN, not yet a CRIT. Blue
+# must notice the brain getting sluggish before it stops entirely.
+name: k8s_etcd_wobble
+domain: k8s_api
+ticks_total: 80
+
+phases:
+  - name: snappy
+    range: [0, 49]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 20
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 0
+      k8s.deployments.degraded: 0
+      k8s.api.auth_present: 1
+    truth: null
+
+  - name: etcd_laggy
+    range: [50, 79]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 1500
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 8
+      k8s.deployments.degraded: 1
+      k8s.api.auth_present: 1
+    truth: { sev: WARN, code: GATE_DOWN }
+    deadline_ticks: 5

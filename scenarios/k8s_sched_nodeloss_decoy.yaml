@@ -1,0 +1,20 @@
+# k8s_sched_nodeloss_decoy — SCHEDULER FRONT (k8s_api / K via degraded). DECOY.
+# Counter-move vs the champion's not-ready cheat (Kx→Cd for the storm). Here
+# several nodes are lost but the scheduler RE-PLACES the pods successfully —
+# deployments stay healthy (degraded=1). Lost nodes alone are not a scheduling
+# incident; the scheduler front must stay silent. Forces pure degraded gating.
+name: k8s_sched_nodeloss_decoy
+domain: k8s_api
+ticks_total: 150
+phases:
+  - name: nodes_lost_pods_rescheduled
+    range: [0, 149]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 40
+      k8s.nodes.total: 8
+      k8s.nodes.not_ready: 4
+      k8s.events.warnings_60s: 12
+      k8s.deployments.degraded: 1
+      k8s.api.auth_present: 1
+    truth: null

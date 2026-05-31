@@ -1,0 +1,35 @@
+# k8s_sched_pileup — SCHEDULER FRONT (k8s_api / K via deployments.degraded).
+# "Pending Pile-up"
+#
+# Red Team move: a taint/affinity mistake leaves the scheduler unable to place
+# pods, so degraded Deployments (replicas wanted > replicas ready) climb from 0
+# to 5. Workloads aren't getting capacity. Blue must page WARN CLUSTER_DEGRADED.
+name: k8s_sched_pileup
+domain: k8s_api
+ticks_total: 80
+
+phases:
+  - name: all_scheduled
+    range: [0, 49]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 24
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 2
+      k8s.deployments.degraded: 0
+      k8s.api.auth_present: 1
+    truth: null
+
+  - name: pods_pending
+    range: [50, 79]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 30
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 18
+      k8s.deployments.degraded: 5
+      k8s.api.auth_present: 1
+    truth: { sev: WARN, code: CLUSTER_DEGRADED }
+    deadline_ticks: 5

@@ -62,7 +62,7 @@ def list_probes() -> Dict[str, Probe]:
 # wrapped — missing/broken ones don't break the framework.
 from swarm.probes import kernel as _kernel  # noqa: F401,E402
 
-for _name in ('cgroup_pods', 'disk_net', 'k8s_api', 'fabric_peer', 'quorum'):
+for _name in ('cgroup_pods', 'disk_net', 'k8s_api', 'fabric_peer', 'quorum', 'feed'):
     try:
         __import__(f'swarm.probes.{_name}')
     except ImportError:

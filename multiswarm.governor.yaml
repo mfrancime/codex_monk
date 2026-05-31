@@ -1,0 +1,22 @@
+# multiswarm.governor.yaml — the GOVERNOR, booted standalone.
+#
+# One aggregator sub-swarm whose governor agent (quorum probe) correlates the
+# health of every sibling codex.*.fabric — here, the live k8s_deployed Blue
+# champions — into one cluster-wide verdict. With no control-plane peer present,
+# quorum.control_ok is vacuously 1, so there is NO false GATE_DOWN (the trap the
+# full multiswarm.k8s.yaml hit on a creds-less box).
+multiswarm:
+  id: 9
+  name: "codex-governor"
+security:
+  psk: "${VJR_PSK:dev_psk_change_me}"
+swarms:
+  - name: k8s_aggregator
+    include: swarms/k8s_aggregator.yaml
+    state_prefix: "agg."
+    fabric_path: "/dev/shm/codex.k8s_aggregator.fabric"
+    gateway:
+      id: 9
+      bind: "127.0.0.1:19150"
+      peers: []
+      routes: []

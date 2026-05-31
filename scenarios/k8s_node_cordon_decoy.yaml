@@ -1,0 +1,23 @@
+# k8s_node_cordon_decoy — NODES FRONT (k8s_api / K).  "Cordon Drill" — DECOY.
+#
+# Red Team feint: an operator cordons + removes a node for maintenance, so
+# k8s.nodes.total drops 5 → 4 — but every remaining node is Ready
+# (not_ready = 0). Shrinking the fleet on purpose is NOT an incident. A Blue
+# that gated on node COUNT changes pages here → infeasible. Pins Blue to the
+# not_ready signal, never the total.
+name: k8s_node_cordon_decoy
+domain: k8s_api
+ticks_total: 150
+
+phases:
+  - name: planned_maintenance
+    range: [0, 149]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 25
+      k8s.nodes.total: 4
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 6
+      k8s.deployments.degraded: 1
+      k8s.api.auth_present: 1
+    truth: null

@@ -1,0 +1,9 @@
+# ETCD FRONT, NATIVE (feed/Σ). DECOY: a large-but-healthy DB is not an incident.
+name: k8s_etcd_native_bigdb_decoy
+domain: feed
+ticks_total: 150
+phases:
+  - name: big_but_healthy
+    range: [0, 149]
+    frame: { etcd.has_leader: 1, etcd.fsync_avg_ms: 6, etcd.db_size_mb: 6000, etcd.leader_changes_60s: 0, etcd.available: 1 }
+    truth: null

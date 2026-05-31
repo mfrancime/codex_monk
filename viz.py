@@ -271,6 +271,136 @@ def _status_all() -> dict:
     return out
 
 
+# ── wargame round runner (EVOLUTION tab "RUN ROUND" button) ─────────────────
+#
+# Runs one co-evolution round on demand (wargame.py --rounds 1) so the operator
+# can advance the Kubernetes Red-vs-Blue arms race from the browser. Guarded:
+# refuses to start if a round is already in flight — either one this server
+# spawned OR the autonomous wargame_autorun.sh loop's round — so they never race
+# on the shared lineage / web/wargame.json.
+
+_WARGAME_LOCK = threading.Lock()
+_WARGAME = {'proc': None, 'started_at': None}
+
+
+def _wargame_busy() -> bool:
+    # A round this server spawned is the authoritative signal.
+    p = _WARGAME['proc']
+    if p is not None and p.poll() is None:
+        return True
+    # Also detect a round started elsewhere (e.g. wargame_autorun.sh), but match
+    # ONLY a real python interpreter running wargame.py — NOT shells that merely
+    # mention the string (a stale wait-loop did exactly that and wedged this guard).
+    try:
+        r = subprocess.run(
+            ['pgrep', '-f', r'python[^ ]* [^ ]*wargame\.py --rounds'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
+def _wargame_run(rounds: int = 1, gens: int = 250, lam: int = 24) -> dict:
+    with _WARGAME_LOCK:
+        if _wargame_busy():
+            return {'ok': False, 'running': True,
+                    'error': 'a wargame round is already in flight'}
+        log_dir = os.path.join(ROOT, 'graph')
+        os.makedirs(log_dir, exist_ok=True)
+        fh = open(os.path.join(log_dir, 'wargame_ui.log'), 'ab')
+        env = os.environ.copy()
+        env.setdefault('PYTHONUNBUFFERED', '1')
+        proc = subprocess.Popen(
+            [sys.executable, '-u', os.path.join(ROOT, 'wargame.py'),
+             '--rounds', str(rounds), '--gens', str(gens), '--lam', str(lam)],
+            cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env)
+        _WARGAME['proc'] = proc
+        _WARGAME['started_at'] = time.time()
+        return {'ok': True, 'running': True, 'pid': proc.pid,
+                'rounds': rounds, 'gens': gens, 'lam': lam}
+
+
+def _wargame_status() -> dict:
+    return {'running': _wargame_busy(), 'started_at': _WARGAME['started_at']}
+
+
+# ── START WAR: autonomous Red-vs-Blue battle (war_driver.py) ────────────────
+
+_WAR_LOCK = threading.Lock()
+_WAR = {'proc': None}
+
+
+def _war_running() -> bool:
+    p = _WAR['proc']
+    return p is not None and p.poll() is None
+
+
+_WAR_DIFFICULTIES = ('recruit', 'veteran', 'elite')
+_WAR_STRATEGIES = ('balanced', 'blitz', 'stealth', 'feint')
+
+
+def _war_start(duration: int = 600, gap: float = 7.0,
+               difficulty: str = 'veteran', strategy: str = 'balanced') -> dict:
+    with _WAR_LOCK:
+        if _war_running():
+            return {'ok': False, 'running': True, 'error': 'a war is already raging'}
+        difficulty = (difficulty or 'veteran').lower()
+        if difficulty not in _WAR_DIFFICULTIES:
+            difficulty = 'veteran'
+        strategy = (strategy or 'balanced').lower()
+        if strategy not in _WAR_STRATEGIES:
+            strategy = 'balanced'
+        fh = open(os.path.join(ROOT, 'graph', 'war.log'), 'ab')
+        env = os.environ.copy()
+        env.setdefault('PYTHONUNBUFFERED', '1')
+        env['CODEX_WAR_DIFFICULTY'] = difficulty   # Red's lethality (env config)
+        env['CODEX_WAR_STRATEGY'] = strategy        # Red's attack shape (env config)
+        proc = subprocess.Popen(
+            [sys.executable, '-u', os.path.join(ROOT, 'war_driver.py'),
+             str(duration), str(gap)],
+            cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env)
+        _WAR['proc'] = proc
+        return {'ok': True, 'running': True, 'pid': proc.pid,
+                'duration_s': duration, 'difficulty': difficulty,
+                'strategy': strategy}
+
+
+def _war_mark_stopped():
+    """Force web/war.json to running:false so the UI un-sticks even if the driver
+    died before writing its own final state (the cause of the stuck blinking
+    STOP button)."""
+    wp = os.path.join(ROOT, 'web', 'war.json')
+    try:
+        with open(wp) as f:
+            w = json.load(f)
+    except Exception:
+        w = {'score': {'blue': 0, 'red': 0}, 'fronts': {}, 'log': []}
+    w['running'] = False
+    cur = w.get('current') or {}
+    cur['phase'] = 'calm'
+    w['current'] = cur
+    try:
+        tmp = wp + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(w, f)
+        os.replace(tmp, wp)
+    except Exception:
+        pass
+
+
+def _war_stop() -> dict:
+    with _WAR_LOCK:
+        p = _WAR['proc']
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        _WAR['proc'] = None
+        _war_mark_stopped()      # always un-stick the UI, dead proc or not
+        return {'ok': True, 'running': False, 'note': 'ceasefire'}
+
+
 # ── fabric reading ─────────────────────────────────────────────────────────
 
 def _discover_fabrics() -> list:
@@ -577,6 +707,7 @@ class VizHandler(BaseHTTPRequestHandler):
             '.html': 'text/html; charset=utf-8',
             '.css':  'text/css',
             '.js':   'application/javascript',
+            '.json': 'application/json; charset=utf-8',
             '.svg':  'image/svg+xml',
         }.get(ext, 'application/octet-stream')
         try:
@@ -670,6 +801,23 @@ class VizHandler(BaseHTTPRequestHandler):
                 body.get('path', ''),
                 int(body.get('id', 0)),
                 body.get('genome', '')))
+        if path == '/api/wargame' and method == 'POST':
+            return self._json(_wargame_run(
+                int(body.get('rounds', 1)),
+                int(body.get('gens', 250)),
+                int(body.get('lam', 24))))
+        if path == '/api/wargame' and method == 'GET':
+            return self._json(_wargame_status())
+        if path == '/api/war' and method == 'POST':
+            action = (body.get('action') or 'start').lower()
+            if action == 'stop':
+                return self._json(_war_stop())
+            return self._json(_war_start(int(body.get('duration', 600)),
+                                         float(body.get('gap', 7.0)),
+                                         str(body.get('difficulty', 'veteran')),
+                                         str(body.get('strategy', 'balanced'))))
+        if path == '/api/war' and method == 'GET':
+            return self._json({'running': _war_running()})
 
         return self._json({'error': 'not found', 'path': path}, status=404)
 

@@ -1,0 +1,22 @@
+# k8s_etcd_compaction_decoy — ETCD FRONT (k8s_api / K via latency). DECOY.
+#
+# Red Team feint: etcd runs its routine history compaction, nudging apiserver
+# latency to a still-healthy 300ms, sustained. Normal housekeeping is NOT an
+# incident. A Blue whose latency threshold drifted below 300 pages here →
+# infeasible. Pins the etcd-WARN threshold comfortably above 300ms.
+name: k8s_etcd_compaction_decoy
+domain: k8s_api
+ticks_total: 150
+
+phases:
+  - name: routine_compaction
+    range: [0, 149]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 300
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 4
+      k8s.deployments.degraded: 0
+      k8s.api.auth_present: 1
+    truth: null

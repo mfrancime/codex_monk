@@ -39,6 +39,11 @@
   let hovered = null;        // currently hover-highlighted mesh
   let replayMode = false;    // true while the TIME MACHINE is driving colors
 
+  // ⚔ battle-of-the-spheres state (fed from web/war.json via setWar)
+  let warState = null;
+  let _warTurn = -1, _warPhase = '';
+  const projectiles = [];
+
   // ── helpers ───────────────────────────────────────────────────────────
 
   let _glowTex = null;
@@ -76,6 +81,55 @@
     return spr;
   }
 
+  // Team identity from the fabric path, so the 3D spheres read as armies, not
+  // anonymous "FABRIC" blobs. Label is team-COLORED (persistent identity); the
+  // sphere itself stays severity-colored (live attack state).
+  function teamLabel(swarm) {
+    const p = swarm.path || '';
+    if (/k8s_deployed/.test(p)) return 'BLUE ARMY';
+    if (/codex\.red\.|\/red\./.test(p)) return 'RED ARMY';
+    if (/aggregat/.test(p)) return 'GOVERNOR';
+    if (/evolver/.test(p)) return 'EVOLVER';
+    if (/kernel/.test(p)) return 'KERNEL';
+    return swarm.swarm_name
+      || (p.split('/').pop() || 'fabric').replace(/^codex\./, '').replace(/\.fabric$/, '');
+  }
+  function teamColor(swarm) {
+    const p = swarm.path || '';
+    if (/k8s_deployed/.test(p)) return 0x5fb8ff;          // 🔵 blue
+    if (/codex\.red\.|\/red\./.test(p)) return 0xff3030;  // 🔴 red
+    if (/aggregat/.test(p)) return 0xffb300;              // 🛡️ amber
+    return 0x4dff7c;                                       // green
+  }
+  function isTeam(swarm) {
+    return /k8s_deployed|codex\.red\.|\/red\.|aggregat/.test(swarm.path || '');
+  }
+  // The ARMY spheres are colored by TEAM (blue/red/amber) so you can see who's
+  // who; the orbiting agent dots still flash by their own severity (live fire).
+  function hubColor(swarm) {
+    return isTeam(swarm) ? teamColor(swarm) : sevColor(swarm.severity);
+  }
+
+  // small unit tag (front name) that rides above an agent dot as a CHILD sprite,
+  // so it follows the dot's orbit for free. Turns anonymous "fairies" into the
+  // named soldiers of each army (pods/nodes/apiserver/scheduler defenders).
+  function makeUnitTag(text, color) {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 32;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 18px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6;
+    ctx.fillText(text.toUpperCase(), 64, 17);
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 2;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthTest: false }));
+    spr.scale.set(6, 1.5, 1);
+    spr.position.set(0, 2.0, 0);
+    return spr;
+  }
+
   function makeStarfield() {
     const n = 600, pos = new Float32Array(n * 3);
     // deterministic scatter (no Math.random dependency for repeatability)
@@ -106,7 +160,7 @@
     const group = new THREE.Group();
     group.position.copy(pos);
 
-    const col = sevColor(swarm.severity);
+    const col = hubColor(swarm);
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(4.2, 32, 32),
       new THREE.MeshStandardMaterial({
@@ -124,7 +178,7 @@
       }));
     group.add(shell);
 
-    const label = makeLabel(swarm.swarm_name || 'fabric', col);
+    const label = makeLabel(teamLabel(swarm), teamColor(swarm));
     label.position.set(0, 11, 0);
     group.add(label);
 
@@ -176,7 +230,7 @@
 
   function updateHub(rec, swarm) {
     if (replayMode) { rec.data = swarm; return; }  // TIME MACHINE owns the colors
-    const col = sevColor(swarm.severity);
+    const col = hubColor(swarm);                    // team identity persists
     rec.sphere.material.color.setHex(col);
     rec.sphere.material.emissive.setHex(col);
     rec.shell.material.color.setHex(col);
@@ -241,6 +295,251 @@
   let _last = 0;
   const FRAME_MS = 1000 / 30;               // cap at ~30 fps to spare the CPU/GPU
 
+  // ⚔ BATTLE OF THE SPHERES — drive the 3D fight from the live war state.
+  const unitFront = {};          // "path#id" -> front (pods/nodes/…)
+  let _unitTags = 0;
+
+  function tagUnits(path, color) {
+    const rec = path && hubs[path];
+    if (!rec) return;
+    Object.keys(rec.agents).forEach((id) => {
+      const front = unitFront[path + '#' + id];
+      const m = rec.agents[id];
+      if (front && !m.userData._tag) {
+        const tag = makeUnitTag(front, color);
+        m.add(tag);
+        m.userData._tag = tag;
+        _unitTags++;
+        window.__war3dUnitTags = _unitTags;
+      }
+    });
+  }
+
+  function setWar(w) {
+    warState = w;
+    // map each army's agent ids → the front it fights on, so the orbiting dots
+    // read as named units. Blue units carry their aid; Red's are PLAYBOOK-ordered.
+    if (w && w.armies) {
+      const bf = w.blue_fabric, rf = w.red_fabric;
+      ((w.armies.blue && w.armies.blue.units) || []).forEach((u) => {
+        if (bf && u.aid != null) unitFront[bf + '#' + u.aid] = u.front;
+      });
+      ((w.armies.red && w.armies.red.units) || []).forEach((u, i) => {
+        if (rf) unitFront[rf + '#' + (i + 1)] = u.front;
+      });
+      if (bf) tagUnits(bf, teamColor({ path: bf }));
+      if (rf) tagUnits(rf, teamColor({ path: rf }));
+      // territory HP bars on the Blue sphere
+      if (bf && hubs[bf] && w.battlefield) {
+        ensureFrontBars(hubs[bf], Object.keys(w.battlefield));
+        updateFrontBars(hubs[bf], w.battlefield);
+        buildTethers(hubs[bf]);            // link each defender to its ground
+      }
+    }
+  }
+
+  // 🔗 TETHERS — a faint line from each Blue defender unit to the territory bar
+  // it guards, colored by the front's holder. Makes the defensive assignment
+  // legible (which soldier holds which ground). 4 lines, endpoints refreshed per
+  // frame from world positions — light.
+  function buildTethers(blueRec) {
+    if (!blueRec || !blueRec._frontBars || !warState) return;
+    if (!blueRec._tethers) blueRec._tethers = {};
+    const units = (warState.armies && warState.armies.blue
+                   && warState.armies.blue.units) || [];
+    units.forEach((u) => {
+      if (blueRec._tethers[u.front]) return;
+      const fb = blueRec._frontBars[u.front];
+      const mesh = blueRec.agents[u.aid];
+      if (!fb || !mesh) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(6), 3));
+      const line = new THREE.Line(geo, new THREE.LineBasicMaterial({
+        color: 0x5fb8ff, transparent: true, opacity: 0.3 }));
+      scene.add(line);
+      blueRec._tethers[u.front] = { line, mesh, fb };
+      window.__war3dTethers = (window.__war3dTethers || 0) + 1;
+    });
+  }
+  function updateTethers() {
+    const blue = warState && hubs[warState.blue_fabric];
+    if (!blue || !blue._tethers) return;
+    const a = new THREE.Vector3(), bv = new THREE.Vector3();
+    Object.values(blue._tethers).forEach((t) => {
+      if (!t.mesh.parent) { t.line.visible = false; return; }  // unit despawned
+      t.line.visible = true;
+      t.mesh.getWorldPosition(a);
+      t.fb.holder.getWorldPosition(bv);
+      const pos = t.line.geometry.attributes.position;
+      pos.array[0] = a.x; pos.array[1] = a.y; pos.array[2] = a.z;
+      pos.array[3] = bv.x; pos.array[4] = bv.y; pos.array[5] = bv.z;
+      pos.needsUpdate = true;
+      t.line.material.color.copy(t.fb.bar.material.color);       // match the ground
+    });
+  }
+
+  // world position of a Blue front's territory bar (beam aim point), or null
+  function frontWorldPos(blue, front) {
+    const fb = blue && blue._frontBars && blue._frontBars[front];
+    if (!fb) return null;
+    const v = new THREE.Vector3();
+    fb.holder.getWorldPosition(v);
+    return v;
+  }
+
+  function spawnProjectile(from, to, phase, front) {
+    if (projectiles.length > 20) return;
+    const hex = phase === 'stealth' ? 0xb030ff
+      : phase === 'preempting' ? 0x5fb8ff : 0xff3030;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: hex, transparent: true, opacity: 0.95,
+      depthTest: false,
+    }));
+    spr.scale.set(3.4, 3.4, 1);
+    spr.position.copy(from);
+    spr.userData = { from: from.clone(), to: to.clone(), t: 0, hex, front };
+    scene.add(spr);
+    projectiles.push(spr);
+    window.__war3dProjSpawned = (window.__war3dProjSpawned || 0) + 1;
+  }
+
+  function updateProjectiles(dt) {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const s = projectiles[i];
+      s.userData.t += dt * 1.5;
+      const tt = s.userData.t;
+      if (tt >= 1) {                              // ⚡ the round LANDS
+        onImpact(s.userData.to, s.userData.hex, s.userData.front);
+        scene.remove(s); projectiles.splice(i, 1); continue;
+      }
+      s.position.lerpVectors(s.userData.from, s.userData.to, tt);
+      s.position.y += Math.sin(tt * Math.PI) * 7;
+      s.material.opacity = 0.95 * (1 - tt * 0.4);
+    }
+  }
+
+  // ⚡ IMPACT JUICE — a beam reaching a front blooms a burst and recoils the
+  // struck territory bar. Short-lived additive sprites, capped, so it stays
+  // light. This is the hit-feedback that makes the ground war feel physical.
+  const bursts = [];
+  function spawnBurst(pos, hex) {
+    if (bursts.length > 12) return;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: hex, transparent: true, opacity: 1,
+      depthTest: false, blending: THREE.AdditiveBlending,
+    }));
+    spr.scale.set(2, 2, 1);
+    spr.position.copy(pos);
+    spr.userData = { t: 0 };
+    scene.add(spr);
+    bursts.push(spr);
+    window.__war3dBursts = (window.__war3dBursts || 0) + 1;
+  }
+  function updateBursts(dt) {
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const s = bursts[i];
+      s.userData.t += dt * 3.2;
+      const tt = s.userData.t;
+      if (tt >= 1) { scene.remove(s); bursts.splice(i, 1); continue; }
+      const sc = 2 + tt * 11;
+      s.scale.set(sc, sc, 1);
+      s.material.opacity = 1 - tt;
+    }
+  }
+  function onImpact(pos, hex, front) {
+    spawnBurst(pos, hex);
+    const blue = warState && hubs[warState.blue_fabric];
+    const fb = blue && blue._frontBars && blue._frontBars[front];
+    if (fb) fb.bar.userData.hitT = 0.4;          // recoil this territory bar
+  }
+
+  function flashHub(rec, hex) {
+    if (rec) {
+      rec.flashT = 0.7; rec.flashHex = hex;
+      window.__war3dFlashes = (window.__war3dFlashes || 0) + 1;
+    }
+  }
+
+  // 🗺️ TERRITORY — the 4 k8s fronts as HP bars ringing the Blue sphere. Each
+  // drains with its front's health and recolors by holder (blue held → amber
+  // contested → red fallen), so the cluster's ground war is legible ON the
+  // battlefield, not just in the console. ~8 objects, attached to the blue hub.
+  const _frontOrder = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
+  function frontHolderColor(h) {
+    return h === 'blue' ? 0x5fb8ff : (h === 'red' ? 0xff3030 : 0xffb300);
+  }
+  function ensureFrontBars(rec, fronts) {
+    if (rec._frontBars) return;
+    rec._frontBars = {};
+    const order = fronts.slice().sort(
+      (a, b) => (_frontOrder.indexOf(a) + 1 || 99) - (_frontOrder.indexOf(b) + 1 || 99));
+    order.forEach((f, i) => {
+      const a = (i / order.length) * Math.PI * 2;
+      const R = 11;
+      const holder = new THREE.Group();
+      holder.position.set(Math.cos(a) * R, -3, Math.sin(a) * R);
+      const bar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 6, 0.8),
+        new THREE.MeshStandardMaterial({
+          color: 0x5fb8ff, emissive: 0x5fb8ff, emissiveIntensity: 0.9,
+          roughness: 0.4, metalness: 0.3 }));
+      bar.position.y = 3;
+      holder.add(bar);
+      const lab = makeUnitTag(f, 0x9fd8ff);
+      lab.position.set(0, 7.4, 0);
+      holder.add(lab);
+      rec.group.add(holder);
+      rec._frontBars[f] = { holder, bar };
+    });
+    window.__war3dFrontBars = Object.keys(rec._frontBars).length;
+  }
+  function updateFrontBars(rec, bf) {
+    if (!rec._frontBars) return;
+    Object.keys(rec._frontBars).forEach((f) => {
+      const c = bf[f]; if (!c) return;
+      const { bar } = rec._frontBars[f];
+      const h = Math.max(0.05, (c.health || 0) / 100);
+      bar.scale.y = h;
+      bar.position.y = 3 * h;                 // keep the base anchored at 0
+      const col = frontHolderColor(c.holder);
+      bar.material.color.setHex(col);
+      bar.material.emissive.setHex(col);
+    });
+  }
+
+  function stepBattle(dt) {
+    updateProjectiles(dt);                       // in-flight rounds + impacts
+    updateBursts(dt);                            // impact blooms (even post-war)
+    if (!warState || !warState.running) return;
+    const blue = hubs[warState.blue_fabric];
+    const red = hubs[warState.red_fabric];
+    const cur = warState.current || {};
+    const ph = cur.phase || '';
+    if (cur.phase !== _warPhase || warState.turn !== _warTurn) {
+      if (blue && red && ['attacking', 'stealth', 'preempting'].includes(ph)) {
+        const aim = frontWorldPos(blue, cur.front) || blue.pos;  // hit the front
+        spawnProjectile(red.pos, aim, ph, cur.front);
+      }
+      if (['breached', 'stealth_hit'].includes(ph)) flashHub(blue, 0xff3030);
+      else if (['blocked', 'preempted'].includes(ph)) flashHub(blue, 0x4dff7c);
+      _warPhase = cur.phase; _warTurn = warState.turn;
+    }
+    // ⚡ decay territory-bar recoil (set on impact) — a quick bright width-pop
+    if (blue && blue._frontBars) {
+      Object.values(blue._frontBars).forEach((fb) => {
+        const b = fb.bar;
+        if (b.userData.hitT > 0) {
+          b.userData.hitT = Math.max(0, b.userData.hitT - dt);
+          const k = b.userData.hitT / 0.4;
+          b.material.emissiveIntensity = 0.9 + k * 3;
+          b.scale.x = 1 + k * 0.6; b.scale.z = 1 + k * 0.6;
+        } else if (b.scale.x !== 1) {
+          b.material.emissiveIntensity = 0.9; b.scale.x = 1; b.scale.z = 1;
+        }
+      });
+    }
+  }
+
   function animate() {
     // freeze hook: lets a test (or a paused tab) stop the rAF loop after
     // rendering one final frame, so a screenshot can capture a stable image.
@@ -256,9 +555,23 @@
     const t = now / 1000;
     const heat = (5 - defcon) / 4;            // 0 calm … 1 DEFCON-1
 
+    // ⚔ drive the battle (projectiles, sphere flashes) from the war state
+    stepBattle(dt);
+    updateTethers();          // refresh defender→territory link endpoints
+
     // hub breathing + shell spin + agent orbits
     Object.values(hubs).forEach((rec) => {
-      const pulse = 1.3 + Math.sin(t * 2 + rec.pos.x) * 0.25 + heat * 0.6;
+      let pulse = 1.3 + Math.sin(t * 2 + rec.pos.x) * 0.25 + heat * 0.6;
+      // ⚔ battle flash: a hit/block momentarily slams the sphere bright + tints it
+      if (rec.flashT > 0) {
+        rec.flashT = Math.max(0, rec.flashT - dt);
+        const k = rec.flashT / 0.7;                 // 1 → 0 over the flash
+        pulse += k * 4;
+        rec.sphere.material.emissive.setHex(rec.flashHex);
+        if (rec.flashT === 0 && rec.data) {         // restore the team/sev color
+          rec.sphere.material.emissive.setHex(hubColor(rec.data));
+        }
+      }
       rec.sphere.material.emissiveIntensity = pulse;
       rec.shell.rotation.y += dt * 0.25;
       rec.shell.rotation.x += dt * 0.12;
@@ -294,9 +607,20 @@
     composer.render();
   }
 
+  // Lens-shift the camera so the cluster renders LEFT of screen center, clear of
+  // the right-hand CYBERWAR CONSOLE / WARGAME panels (which otherwise cover the
+  // Blue army). Pure projection offset — no geometry moved, auto-rotate stays
+  // centered on the cluster. Positive offsetX pushes rendered content left.
+  function applyViewOffset() {
+    const W = window.innerWidth, H = window.innerHeight;
+    const off = Math.min(380, Math.round(W * 0.17));   // ~17% of width, capped
+    camera.setViewOffset(W, H, off, 0, W, H);
+  }
+
   function onResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+    applyViewOffset();
     renderer.setSize(window.innerWidth, window.innerHeight);
     composer.setSize(window.innerWidth, window.innerHeight);
     bloom.setSize(window.innerWidth * 0.5, window.innerHeight * 0.5);
@@ -381,6 +705,10 @@
     renderer.domElement.addEventListener('pointermove', handleHover);
     window.addEventListener('resize', onResize);
 
+    applyViewOffset();          // bias the stage left, away from the right panels
+    // test hook: NDC-x of the world origin (cluster center) — negative = shifted left
+    window.__war3dCenterNDC = () => new THREE.Vector3(0, 0, 0).project(camera).x;
+
     animate();
     window.__war3dReady = true;
   }
@@ -423,5 +751,5 @@
   }
   function clearReplay() { replayMode = false; }   // next live update recolors
 
-  window.War3D = { init, update, setDefcon, setReplay, clearReplay };
+  window.War3D = { init, update, setDefcon, setReplay, clearReplay, setWar };
 })();

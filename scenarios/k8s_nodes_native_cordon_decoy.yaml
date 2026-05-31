@@ -1,0 +1,9 @@
+# NODES FRONT, NATIVE (feed/Ω). DECOY: nodes cordoned for maintenance but Ready.
+name: k8s_nodes_native_cordon_decoy
+domain: feed
+ticks_total: 150
+phases:
+  - name: cordoned_but_ready
+    range: [0, 149]
+    frame: { node.count: 5, node.not_ready: 0, node.mem_pressure: 0, node.unschedulable: 2, node.available: 1 }
+    truth: null

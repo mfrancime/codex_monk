@@ -1,0 +1,34 @@
+# k8s_pod_oom — PODS FRONT (cgroup_pods / Π). The OOMKill storm.
+#
+# Red Team escalation: pods breach their memory.max and the kernel OOM-killer
+# reaps them — pod.delta.oom_kills_60s jumps to 4 in the window. This is worse
+# than mere pressure: containers are dying. Blue must escalate to CRITICAL
+# POD_PRESSURE within 3 ticks, and that CRIT rule must dominate the WARN rule
+# (it fires even though psi.some is also high).
+name: k8s_pod_oom
+domain: cgroup_pods
+ticks_total: 80
+
+phases:
+  - name: calm
+    range: [0, 49]
+    frame:
+      pod.max.psi_some_avg10: 3.0
+      pod.max.psi_full_avg10: 0.0
+      pod.delta.oom_kills_60s: 0
+      pod.count: 6
+      pod.count_pressured: 0
+      pod.cgroup_root: 1
+    truth: null
+
+  - name: oom_storm
+    range: [50, 79]
+    frame:
+      pod.max.psi_some_avg10: 8.0
+      pod.max.psi_full_avg10: 4.0
+      pod.delta.oom_kills_60s: 4
+      pod.count: 6
+      pod.count_pressured: 3
+      pod.cgroup_root: 1
+    truth: { sev: CRITICAL, code: POD_PRESSURE }
+    deadline_ticks: 3

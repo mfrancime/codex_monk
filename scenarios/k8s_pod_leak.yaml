@@ -1,0 +1,33 @@
+# k8s_pod_leak — PODS FRONT (cgroup_pods / Π). New attack class: slow leak.
+# A pod's working set creeps toward its memory.max (mem_pct -> 95%) WITHOUT
+# generating sustained pressure yet (psi.some low) and before any OOMKill. The
+# OOM/pressure-based champion (ΠpΠo→Cp→Wp) is blind to this — it must learn to
+# watch mem_pct (Πm) and page WARN before the pod is reaped. Calm phase holds a
+# healthy 70% so the threshold is pinned in (70,95].
+name: k8s_pod_leak
+domain: cgroup_pods
+ticks_total: 100
+phases:
+  - name: healthy_70pct
+    range: [0, 59]
+    frame:
+      pod.max.psi_some_avg10: 2.0
+      pod.max.psi_full_avg10: 0.0
+      pod.max.mem_pct: 70.0
+      pod.delta.oom_kills_60s: 0
+      pod.count: 6
+      pod.count_pressured: 0
+      pod.cgroup_root: 1
+    truth: null
+  - name: leak_to_95pct
+    range: [60, 99]
+    frame:
+      pod.max.psi_some_avg10: 2.0
+      pod.max.psi_full_avg10: 0.0
+      pod.max.mem_pct: 95.0
+      pod.delta.oom_kills_60s: 0
+      pod.count: 6
+      pod.count_pressured: 0
+      pod.cgroup_root: 1
+    truth: { sev: WARN, code: POD_PRESSURE }
+    deadline_ticks: 5

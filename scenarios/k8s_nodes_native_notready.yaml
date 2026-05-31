@@ -1,0 +1,14 @@
+# NODES FRONT, NATIVE (feed/Ω). One kubelet stops posting Ready.
+name: k8s_nodes_native_notready
+domain: feed
+ticks_total: 80
+phases:
+  - name: all_ready
+    range: [0, 49]
+    frame: { node.count: 5, node.not_ready: 0, node.mem_pressure: 0, node.unschedulable: 0, node.available: 1 }
+    truth: null
+  - name: one_down
+    range: [50, 79]
+    frame: { node.count: 5, node.not_ready: 1, node.mem_pressure: 0, node.unschedulable: 0, node.available: 1 }
+    truth: { sev: WARN, code: NODE_NOT_READY }
+    deadline_ticks: 5

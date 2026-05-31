@@ -1,0 +1,23 @@
+# k8s_api_warnstorm_decoy — CONTROL-PLANE FRONT (k8s_api / K). DECOY (truth: null).
+#
+# Red Team feint: a burst of Warning Events (25 in 60s — a noisy rollout, a
+# flapping CronJob) while the apiserver is healthy and every node is Ready.
+# Warnings alone are NOT an incident. A Blue that learned to gate on
+# k8s.events.warnings_60s pages here → infeasible. This pins Blue to the
+# structural signals (api healthy, nodes ready) and away from event noise.
+name: k8s_api_warnstorm_decoy
+domain: k8s_api
+ticks_total: 160
+
+phases:
+  - name: noisy_but_up
+    range: [0, 159]
+    frame:
+      k8s.api.healthy: 1
+      k8s.api.latency_ms: 40
+      k8s.nodes.total: 5
+      k8s.nodes.not_ready: 0
+      k8s.events.warnings_60s: 25
+      k8s.deployments.degraded: 2
+      k8s.api.auth_present: 1
+    truth: null

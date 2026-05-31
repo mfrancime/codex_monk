@@ -25,13 +25,14 @@
     <span class="lvl" id="defcon-lvl">5</span>
     <span class="state" id="defcon-state">NOMINAL</span>
   </div>
-  <div class="score-chip" title="Uptime defense score — climbs while all-green, streak resets on CRITICAL">
+  <div class="score-chip" id="score-chip" title="Uptime defense score — climbs while all-green, streak resets on CRITICAL">
     <span class="lbl">SCORE</span>
     <span class="val" id="score-val">0</span>
     <span class="streak" id="score-streak">×1</span>
   </div>
   <div class="topo-readout"><span id="topo-meta">discovering fabrics…</span></div>
-  <a class="hud-link" href="/docs.html" title="What is this?">? WHAT IS THIS</a>
+  <button class="hud-link evo-link" id="evo-toggle" title="Kubernetes wargame — genome evolution">⧬ WARGAME</button>
+  <button class="hud-link" id="docs-toggle" type="button" title="What is this?">? WHAT IS THIS</button>
   <div class="status">
     <span class="dot" id="conn-dot"></span>
     <span id="conn-text">connecting…</span>
@@ -102,6 +103,20 @@
   <div class="alert-wrap" id="alert-tbody"></div>
 </section>
 
+<!-- ⚔ CYBERWAR CONSOLE — live SIGINT: status / strategies / autonomous events
+     (the right-hand command feed; the spheres are the battle, this is the wire) -->
+<aside class="warconsole glass" id="warconsole">
+  <div class="wc-head">
+    <span class="wc-title">⚔ CYBERWAR CONSOLE</span>
+    <span class="wc-live" id="wc-live">○ STANDBY</span>
+  </div>
+  <div class="wc-score" id="wc-score"></div>
+  <div class="wc-series" id="wc-series"></div>
+  <div class="wc-teams" id="wc-teams"></div>
+  <div class="wc-feed-head">▶ AUTONOMOUS EVENT FEED <span class="wc-cursor">█</span></div>
+  <div class="wc-feed" id="wc-feed"><div class="wc-idle">no active operation — open ⧬ WARGAME and click ⚔ START WAR</div></div>
+</aside>
+
 <!-- hint -->
 <div class="scene-hint">drag to orbit · scroll to zoom · click a node</div>
 
@@ -147,6 +162,65 @@
     <div id="dr-result" class="dr-result"></div>
     <div class="dr-section">PROBE FRAME</div>
     <pre id="dr-frame" class="dr-frame">—</pre>
+  </div>
+</aside>
+
+<!-- EVOLUTION / WARGAME tab — Kubernetes Red-vs-Blue co-evolution overlay -->
+<section class="evopanel glass" id="evopanel" aria-hidden="true">
+  <div class="evo-head">
+    <span class="evo-title">⧬ KUBERNETES WARGAME</span>
+    <span class="evo-sub" id="evo-sub">Red Team vs Blue genome · co-evolution</span>
+    <select class="evo-diff" id="evo-diff" title="Red Team difficulty — how lethal the attackers are (reaction window, stealth rate, erosion)">
+      <option value="recruit">🟢 RECRUIT</option>
+      <option value="veteran" selected>🟠 VETERAN</option>
+      <option value="elite">🔴 ELITE</option>
+    </select>
+    <select class="evo-diff" id="evo-strategy" title="Red Team strategy — the SHAPE of the attack (blitz=overwhelm one front · stealth=infiltrate wide · feint=bait then strike elsewhere)">
+      <option value="balanced" selected>⚖ BALANCED</option>
+      <option value="blitz">⚡ BLITZ</option>
+      <option value="stealth">🥷 STEALTH</option>
+      <option value="feint">🎭 FEINT</option>
+    </select>
+    <select class="evo-diff" id="evo-bestof" title="Series length — first to win the majority takes the series">
+      <option value="3">BEST OF 3</option>
+      <option value="5" selected>BEST OF 5</option>
+      <option value="7">BEST OF 7</option>
+    </select>
+    <button class="evo-war" id="evo-war" type="button" title="Launch an autonomous Red-vs-Blue battle against the live champions">⚔ START WAR</button>
+    <button class="evo-run" id="evo-run" type="button" title="Run one co-evolution round now (advance the arms race)">▶ RUN ROUND</button>
+    <button class="evo-close" id="evo-close" type="button">×</button>
+  </div>
+  <div id="evo-war-banner"></div>
+  <div id="evo-war-bf" class="war-bf"></div>
+  <div id="evo-war-detail"></div>
+  <div class="evo-body" id="evo-body"><div class="evo-empty">loading wargame…</div></div>
+</section>
+
+<!-- ⚑ VICTORY SCREEN — the match's conclusion (winner, final stats, rematch) -->
+<div class="war-victory" id="war-victory" aria-hidden="true">
+  <div class="wv-card">
+    <div class="wv-banner" id="wv-banner">⚑ WAR OVER</div>
+    <div class="wv-score" id="wv-score"></div>
+    <div class="wv-stats" id="wv-stats"></div>
+    <div class="wv-series" id="wv-series"></div>
+    <div class="wv-summary" id="wv-summary"></div>
+    <div class="wv-actions">
+      <button class="wv-rematch" id="wv-rematch" type="button">⚔ REMATCH</button>
+      <button class="wv-dismiss" id="wv-dismiss" type="button">✕ dismiss</button>
+    </div>
+  </div>
+</div>
+
+<!-- ? WHAT IS THIS — collapsible docs side panel (embeds /docs.html, single source) -->
+<aside class="docs-drawer glass" id="docs-drawer" aria-hidden="true">
+  <div class="docs-head">
+    <span class="docs-title">▣ WHAT IS THIS</span>
+    <a class="docs-pop" href="/docs.html" target="_blank" title="open full page">⇱</a>
+    <button class="docs-close" id="docs-close" type="button" title="collapse">×</button>
+  </div>
+  <div class="docs-spa">
+    <nav class="docs-tree" id="docs-tree"></nav>
+    <div class="docs-content doc" id="docs-content"><p class="docs-loading">loading…</p></div>
   </div>
 </aside>
 
