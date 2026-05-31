@@ -69,6 +69,21 @@ PRECURSOR = {'pods': 'pods_pre', 'scheduler': 'scheduler_pre'}
 # real path to win. Used more as the war drags on (escalating cunning).
 STEALTH = {'pods': 'pods_stealth', 'scheduler': 'scheduler_stealth'}
 
+# 🎚️ DIFFICULTY — how lethal the Red swarm is, chosen at START WAR (env-based,
+# like the rest of codex_monk's runtime config). Scales the reaction window Blue
+# gets, how often Red goes stealth / concentrates on the soft front, and how hard
+# each hit erodes ground. RECRUIT = Blue romps; ELITE = Red is a killer.
+DIFFICULTY = os.environ.get('CODEX_WAR_DIFFICULTY', 'veteran').lower()
+DIFF_CFG = {
+    'recruit': {'win_mult': 1.8, 'stealth_cap': 0.25, 'stealth_base': 0.10,
+                'soft_p': 0.55, 'erode': 12, 'breach': 12},
+    'veteran': {'win_mult': 1.0, 'stealth_cap': 0.75, 'stealth_base': 0.20,
+                'soft_p': 0.72, 'erode': 17, 'breach': 18},
+    'elite':   {'win_mult': 0.6, 'stealth_cap': 0.92, 'stealth_base': 0.35,
+                'soft_p': 0.88, 'erode': 23, 'breach': 24},
+}
+DC = DIFF_CFG.get(DIFFICULTY, DIFF_CFG['veteran'])
+
 
 class RedSwarm:
     """Red army as a live fabric of attacker units (no new agent class — the war
@@ -185,7 +200,7 @@ def _pick_target(fronts, rng):
     """Red presses the SOFTEST front (breaches + infiltrations, low reinforcement,
     low health) — but ABANDONS a front it's already taken to go take the next,
     so the assault spreads instead of overkilling one corpse."""
-    if rng.random() < 0.72:
+    if rng.random() < DC['soft_p']:
         def soft(p):
             v = fronts[p[0]]
             taken = -60 if v['health'] < 25 else -v['health'] * 0.02
@@ -282,6 +297,7 @@ def main():
                 'strategy': strategy, 'battlefield': battlefield(active),
                 'armies': armies(strategy), 'governor': _governor(),
                 'blue_fabric': FABRIC, 'red_fabric': RED_FABRIC,
+                'difficulty': DIFFICULTY,
                 'log': log[-24:], 'duration_s': duration, 'ends_at': deadline})
 
     _inject('healthy')
@@ -292,7 +308,8 @@ def main():
     while time.time() < deadline:
         turn += 1
         wave = turn // WAVE_TURNS
-        base = WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
+        base = max(1, round(WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
+                            * DC['win_mult']))
         front, aid, label, want_code, _g = _pick_target(fronts, rng)
         defense = fronts[front]['defense']
         window = min(12, base + defense)
@@ -301,7 +318,8 @@ def main():
 
         # 🥷 STEALTH — more likely as the war drags on. Red slips UNDER the
         # detector's threshold for silent erosion. Only a tighter genome catches it.
-        if front in STEALTH and rng.random() < min(0.75, 0.2 * (wave + 1)):
+        if front in STEALTH and rng.random() < min(DC['stealth_cap'],
+                                                   DC['stealth_base'] * (wave + 1)):
             _r('beat')
             _r('attack', front, 'stealth infiltration')
             snap({'front': front, 'attack': 'going dark', 'phase': 'stealth'},
@@ -327,7 +345,7 @@ def main():
                 score['infiltrated'] += 1
                 fronts[front]['stealth'] += 1
                 fronts[front]['last'] = 'STEALTH'
-                fronts[front]['health'] = max(0, fronts[front]['health'] - 17)
+                fronts[front]['health'] = max(0, fronts[front]['health'] - DC['erode'])
                 fronts[front]['verdict'] = 'undetected'
                 result, phase = f'🥷 RED INFILTRATED {front} +2 — silent erosion', 'stealth_hit'
             log.append({'turn': turn, 'front': front, 'attack': 'stealth', 'result': result})
@@ -411,7 +429,7 @@ def main():
             fronts[front]['breaches'] += 1
             fronts[front]['last'] = 'BREACH'
             fronts[front]['defense'] = min(8, defense + 3)
-            fronts[front]['health'] = max(0, fronts[front]['health'] - 18)
+            fronts[front]['health'] = max(0, fronts[front]['health'] - DC['breach'])
             result, phase = f'🔴 BREACH {front} +{pts} → 🛡️ Blue reinforces', 'breached'
 
         log.append({'turn': turn, 'front': front, 'attack': label, 'result': result})
@@ -443,7 +461,7 @@ def main():
             'wave': turn // WAVE_TURNS + 1, 'battlefield': battlefield(),
             'armies': armies(), 'governor': _governor(),
             'log': log[-24:], 'duration_s': duration, 'ends_at': time.time(),
-            'winner': winner, 'mvp': mvp,
+            'difficulty': DIFFICULTY, 'winner': winner, 'mvp': mvp,
             'summary': (f'🗺️ {blue_holds}/{len(fronts)} fronts held by Blue · '
                         f'🏅 MVP: {mvp} ({fronts[mvp]["blocks"] + fronts[mvp]["preempts"]}) · '
                         + (f'🥷 Red took: {", ".join(fell)}' if fell

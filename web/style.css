@@ -883,3 +883,17 @@ body[data-defcon="1"] .klaxon {
 .wv-dismiss { background: transparent; color: var(--text-dim);
   border: 1px solid var(--green-soft); }
 .wv-dismiss:hover { background: var(--panel-hi); color: var(--text); }
+
+/* 🎚️ DIFFICULTY — Red Team lethality selector (war-room) + console badge */
+.evo-diff {
+  font-family: var(--mono); font-size: 11px; letter-spacing: 1px;
+  background: var(--bg-deep); color: var(--text); cursor: pointer;
+  border: 1px solid var(--green-soft); border-radius: 4px; padding: 4px 6px;
+}
+.evo-diff:hover { border-color: var(--green); }
+.wc-diff { font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  padding: 1px 5px; border-radius: 3px; border: 1px solid; }
+.wc-diff.recruit { color: var(--green); border-color: var(--green-soft); }
+.wc-diff.veteran { color: var(--amber); border-color: #5a4410; }
+.wc-diff.elite   { color: var(--red); border-color: #6a1a1a;
+  text-shadow: 0 0 6px var(--red); }

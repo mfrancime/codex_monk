@@ -335,19 +335,28 @@ def _war_running() -> bool:
     return p is not None and p.poll() is None
 
 
-def _war_start(duration: int = 600, gap: float = 7.0) -> dict:
+_WAR_DIFFICULTIES = ('recruit', 'veteran', 'elite')
+
+
+def _war_start(duration: int = 600, gap: float = 7.0,
+               difficulty: str = 'veteran') -> dict:
     with _WAR_LOCK:
         if _war_running():
             return {'ok': False, 'running': True, 'error': 'a war is already raging'}
+        difficulty = (difficulty or 'veteran').lower()
+        if difficulty not in _WAR_DIFFICULTIES:
+            difficulty = 'veteran'
         fh = open(os.path.join(ROOT, 'graph', 'war.log'), 'ab')
         env = os.environ.copy()
         env.setdefault('PYTHONUNBUFFERED', '1')
+        env['CODEX_WAR_DIFFICULTY'] = difficulty   # Red's lethality (env config)
         proc = subprocess.Popen(
             [sys.executable, '-u', os.path.join(ROOT, 'war_driver.py'),
              str(duration), str(gap)],
             cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env)
         _WAR['proc'] = proc
-        return {'ok': True, 'running': True, 'pid': proc.pid, 'duration_s': duration}
+        return {'ok': True, 'running': True, 'pid': proc.pid,
+                'duration_s': duration, 'difficulty': difficulty}
 
 
 def _war_mark_stopped():
@@ -798,7 +807,8 @@ class VizHandler(BaseHTTPRequestHandler):
             if action == 'stop':
                 return self._json(_war_stop())
             return self._json(_war_start(int(body.get('duration', 600)),
-                                         float(body.get('gap', 7.0))))
+                                         float(body.get('gap', 7.0)),
+                                         str(body.get('difficulty', 'veteran'))))
         if path == '/api/war' and method == 'GET':
             return self._json({'running': _war_running()})
 

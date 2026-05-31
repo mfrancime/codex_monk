@@ -947,9 +947,11 @@ function renderWarConsole(w) {
       : 'offline';
     const unit = (u, holder) =>
       `<div class="wc-unit"><span class="wc-front ${holder ? u.holder : 'red'}">${u.front}</span><code>${evoGenomeHTML(u.genome)}</code></div>`;
+    const diff = (w.difficulty || 'veteran').toLowerCase();
+    const diffBadge = `<span class="wc-diff ${diff}">${diff.toUpperCase()}</span>`;
     teamsEl.innerHTML =
       `<div class="wc-team red">
-        <div class="wc-team-head">🔴 RED ARMY · took <b>${red.taken || 0}</b>/5 · 🥷 <b>${red.infiltrations || 0}</b></div>
+        <div class="wc-team-head">🔴 RED ARMY ${diffBadge} · took <b>${red.taken || 0}</b>/5 · 🥷 <b>${red.infiltrations || 0}</b></div>
         <div class="wc-strat">${w.strategy || red.strategy || 'probing'}</div>
         ${(red.units || []).map((u) => unit(u, false)).join('')}
       </div>
@@ -1010,16 +1012,23 @@ function maybeShowVictory(w) {
 $('wv-dismiss').addEventListener('click', () => { WAR.dismissed = true; hideVictory(); });
 $('wv-rematch').addEventListener('click', async () => {
   hideVictory(); WAR.dismissed = true;
-  await jpost('/api/war', { action: 'start', duration: 600, gap: 7 });
+  await jpost('/api/war', {
+    action: 'start', duration: 600, gap: 7, difficulty: warDifficulty() });
   setTimeout(evoWarPoll, 400);
 });
+
+function warDifficulty() {
+  const sel = $('evo-diff');
+  return (sel && sel.value) || 'veteran';
+}
 
 async function evoWarToggle() {
   const btn = $('evo-war');
   const live = btn.classList.contains('live');
   btn.textContent = live ? '…stopping' : '…starting';
   if (live) await jpost('/api/war', { action: 'stop' });
-  else await jpost('/api/war', { action: 'start', duration: 600, gap: 7 });
+  else await jpost('/api/war', {
+    action: 'start', duration: 600, gap: 7, difficulty: warDifficulty() });
   setTimeout(evoWarPoll, 400);
 }
 
