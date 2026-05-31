@@ -179,6 +179,20 @@
   <div class="evo-body" id="evo-body"><div class="evo-empty">loading wargame…</div></div>
 </section>
 
+<!-- ⚑ VICTORY SCREEN — the match's conclusion (winner, final stats, rematch) -->
+<div class="war-victory" id="war-victory" aria-hidden="true">
+  <div class="wv-card">
+    <div class="wv-banner" id="wv-banner">⚑ WAR OVER</div>
+    <div class="wv-score" id="wv-score"></div>
+    <div class="wv-stats" id="wv-stats"></div>
+    <div class="wv-summary" id="wv-summary"></div>
+    <div class="wv-actions">
+      <button class="wv-rematch" id="wv-rematch" type="button">⚔ REMATCH</button>
+      <button class="wv-dismiss" id="wv-dismiss" type="button">✕ dismiss</button>
+    </div>
+  </div>
+</div>
+
 <div class="klaxon" id="klaxon"></div>
 
 <!-- Three.js r134 (UMD globals) + bloom postprocessing, vendored offline -->

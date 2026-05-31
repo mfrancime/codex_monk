@@ -894,6 +894,7 @@ async function evoWarPoll() {
   // ⚔ always-on: drive the battle-of-the-spheres + the right SIGINT console
   if (window.War3D && window.War3D.setWar) window.War3D.setWar(w);
   renderWarConsole(w);
+  maybeShowVictory(w);
   // tab-only rendering (the WARGAME overlay)
   if (EVO.open) {
     const el = $('evo-war-banner');
@@ -969,6 +970,49 @@ function renderWarConsole(w) {
   feedEl.innerHTML = html;
   if (atBottom) feedEl.scrollTop = feedEl.scrollHeight;
 }
+
+// ⚑ VICTORY SCREEN — pop once when a war we watched running comes to an end,
+// with the final tally, MVP, and a one-click rematch. Stays out of the way on
+// page load (only fires on a live running→ended transition, not a stale file).
+function showVictory(w) {
+  const s = w.score || { blue: 0, red: 0 };
+  const armies = w.armies || {};
+  const blueHeld = (armies.blue && armies.blue.held) || 0;
+  const redTook = (armies.red && armies.red.taken) || 0;
+  const nFronts = Object.keys(w.battlefield || {}).length || 5;
+  const win = (w.winner || '—').toUpperCase();
+  const banner = $('wv-banner');
+  banner.textContent = win === 'RED' ? '⚑ RED ARMY WINS' : '🛡️ BLUE HOLDS THE CLUSTER';
+  banner.className = 'wv-banner ' + (win === 'RED' ? 'red' : 'blue');
+  $('wv-score').innerHTML =
+    `<span class="wv-side red">🔴 RED <b>${s.red}</b></span>` +
+    `<span class="wv-x">—</span>` +
+    `<span class="wv-side blue">🔵 BLUE <b>${s.blue}</b></span>`;
+  const stat = (icon, val, lbl) =>
+    `<span class="wv-stat"><span class="wv-sv">${icon} ${val}</span><span class="wv-sl">${lbl}</span></span>`;
+  $('wv-stats').innerHTML =
+    stat('🛡️', `${blueHeld}/${nFronts}`, 'fronts held') +
+    stat('🏅', w.mvp || '—', 'MVP front') +
+    stat('🔮', s.prevented || 0, 'pre-empted') +
+    stat('🥷', (armies.red && armies.red.infiltrations) || 0, 'infiltrated');
+  $('wv-summary').textContent = w.summary || '';
+  $('war-victory').setAttribute('aria-hidden', 'false');
+}
+function hideVictory() { $('war-victory').setAttribute('aria-hidden', 'true'); }
+function maybeShowVictory(w) {
+  const running = !!(w && w.running);
+  if (running) { WAR.wasRunning = true; WAR.dismissed = false; hideVictory(); return; }
+  if (w && w.winner && WAR.wasRunning && !WAR.dismissed) {
+    showVictory(w);
+    WAR.wasRunning = false;           // show exactly once per finished war
+  }
+}
+$('wv-dismiss').addEventListener('click', () => { WAR.dismissed = true; hideVictory(); });
+$('wv-rematch').addEventListener('click', async () => {
+  hideVictory(); WAR.dismissed = true;
+  await jpost('/api/war', { action: 'start', duration: 600, gap: 7 });
+  setTimeout(evoWarPoll, 400);
+});
 
 async function evoWarToggle() {
   const btn = $('evo-war');

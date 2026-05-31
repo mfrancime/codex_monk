@@ -839,3 +839,47 @@ body[data-defcon="1"] .klaxon {
 
 /* keep the console clear of narrow viewports / the time machine */
 @media (max-width: 900px) { .warconsole { width: 300px; } }
+
+/* ⚑ VICTORY SCREEN — the match conclusion overlay (winner + stats + rematch) */
+.war-victory {
+  position: fixed; inset: 0; z-index: 70; display: flex;
+  align-items: center; justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(0,0,0,.55), rgba(0,0,0,.85));
+  backdrop-filter: blur(3px); transition: opacity .25s ease;
+}
+.war-victory[aria-hidden="true"] { opacity: 0; pointer-events: none; }
+.wv-card {
+  width: min(540px, 90vw); padding: 26px 30px; text-align: center;
+  border: 1px solid var(--green-soft); border-radius: 10px;
+  background: linear-gradient(180deg, rgba(10,20,12,.96), rgba(4,8,5,.97));
+  box-shadow: 0 0 60px -16px var(--green), inset 0 0 80px -60px var(--green);
+  animation: wv-pop .35s cubic-bezier(.2,1.3,.4,1) both;
+}
+@keyframes wv-pop { from { transform: scale(.86); opacity: 0; } }
+.wv-banner { font-size: 26px; font-weight: 800; letter-spacing: 2px;
+  margin-bottom: 14px; }
+.wv-banner.red  { color: var(--red);   text-shadow: 0 0 18px var(--red); }
+.wv-banner.blue { color: #5fb8ff;      text-shadow: 0 0 18px #2a6aa0; }
+.wv-score { display: flex; align-items: center; justify-content: center; gap: 14px;
+  font-size: 17px; margin-bottom: 18px; }
+.wv-score .wv-side b { font-size: 26px; }
+.wv-side.red b { color: var(--red); } .wv-side.blue b { color: #5fb8ff; }
+.wv-x { color: var(--text-dim); }
+.wv-stats { display: flex; justify-content: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 14px; }
+.wv-stat { display: flex; flex-direction: column; gap: 2px; min-width: 78px;
+  padding: 6px 8px; border: 1px solid var(--green-soft); border-radius: 6px;
+  background: rgba(0,0,0,.3); }
+.wv-sv { color: var(--text); font-size: 15px; font-weight: 700; }
+.wv-sl { color: var(--text-dim); font-size: 9px; letter-spacing: 1px; }
+.wv-summary { color: var(--amber); font-size: 12px; margin-bottom: 18px;
+  line-height: 1.5; }
+.wv-actions { display: flex; justify-content: center; gap: 12px; }
+.wv-rematch, .wv-dismiss { font-family: var(--mono); cursor: pointer;
+  border-radius: 5px; padding: 9px 20px; font-size: 13px; letter-spacing: 1px; }
+.wv-rematch { background: var(--green); color: #042; border: none; font-weight: 700;
+  box-shadow: 0 0 18px -4px var(--green); }
+.wv-rematch:hover { background: #6fffa0; }
+.wv-dismiss { background: transparent; color: var(--text-dim);
+  border: 1px solid var(--green-soft); }
+.wv-dismiss:hover { background: var(--panel-hi); color: var(--text); }
