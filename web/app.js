@@ -1163,14 +1163,74 @@ $('evo-war-detail').addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EVO.open) evoToggle(false); });
 
-// ── ? WHAT IS THIS — collapsible docs side panel (lazy-embeds /docs.html) ────
+// ── ? WHAT IS THIS — collapsible docs TREE + SPA content (parses /docs.html) ─
+// A real docs experience: a left collapsible tree of sections; clicking a node
+// swaps the content pane in place (no page reload). /docs.html stays the single
+// source — we fetch + parse it, split at each <h2>, and render sections client-
+// side. The ⇱ button still opens the full standalone page.
 (() => {
-  const drawer = $('docs-drawer'), frame = $('docs-frame'), toggle = $('docs-toggle');
+  const drawer = $('docs-drawer'), toggle = $('docs-toggle');
+  const tree = $('docs-tree'), content = $('docs-content');
   if (!drawer || !toggle) return;
-  let loaded = false;
+  let built = false, sections = [];
   const isOpen = () => drawer.getAttribute('aria-hidden') === 'false';
+  const shortLabel = (l) => l.replace(/\s*—.*/, '');
+
+  function showSection(id) {
+    const s = sections.find((x) => x.id === id) || sections[0];
+    if (!s) return;
+    content.innerHTML = s.html;
+    content.scrollTop = 0;
+    tree.querySelectorAll('.tree-node').forEach((n) =>
+      n.classList.toggle('active', n.dataset.id === s.id));
+  }
+
+  function buildTree() {
+    const kids = sections.map((s) =>
+      `<a class="tree-node" data-id="${s.id}">` +
+      (s.num ? `<span class="tn-num">${s.num}</span>` : '') +
+      shortLabel(s.label) + '</a>').join('');
+    tree.innerHTML =
+      '<div class="tree-root" id="docs-treeroot">' +
+        '<div class="tree-rowroot"><span class="tree-caret">▾</span>▣ WHAT IS THIS</div>' +
+        '<div class="tree-kids">' + kids + '</div>' +
+      '</div>';
+    tree.querySelector('.tree-rowroot').addEventListener('click', () =>
+      $('docs-treeroot').classList.toggle('collapsed'));
+    tree.querySelectorAll('.tree-node').forEach((n) =>
+      n.addEventListener('click', () => showSection(n.dataset.id)));
+  }
+
+  async function build() {
+    if (built) return;
+    built = true;
+    let html;
+    try { html = await (await fetch('/docs.html', { cache: 'no-store' })).text(); }
+    catch (e) { content.innerHTML = '<p class="docs-loading">docs unavailable</p>'; return; }
+    const dom = new DOMParser().parseFromString(html, 'text/html');
+    const root = dom.querySelector('.doc');
+    if (!root) { content.innerHTML = '<p class="docs-loading">docs unavailable</p>'; return; }
+    const hud = root.querySelector('.doc-hud'); if (hud) hud.remove();
+    const foot = root.querySelector('footer'); if (foot) foot.remove();
+    sections = [];
+    let cur = { id: 'overview', label: 'Overview', num: '', nodes: [] };
+    Array.from(root.children).forEach((el) => {
+      if (el.tagName === 'H2') {
+        sections.push(cur);
+        const numEl = el.querySelector('.n');
+        const num = numEl ? numEl.textContent.trim() : '';
+        cur = { id: 'sec-' + (num || sections.length), num,
+                label: el.textContent.replace(num, '').trim(), nodes: [el] };
+      } else { cur.nodes.push(el); }
+    });
+    sections.push(cur);
+    sections.forEach((s) => { s.html = s.nodes.map((n) => n.outerHTML).join(''); });
+    buildTree();
+    showSection('overview');
+  }
+
   function setDocs(open) {
-    if (open && !loaded) { frame.src = '/docs.html?embed=1'; loaded = true; }
+    if (open) build();
     drawer.setAttribute('aria-hidden', String(!open));
     toggle.classList.toggle('active', open);
   }
