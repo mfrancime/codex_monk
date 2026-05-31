@@ -532,11 +532,14 @@ body[data-defcon="1"] .klaxon {
   transform: translateX(120%); opacity: 0; pointer-events: none;
 }
 .evo-head {
-  display: flex; align-items: baseline; gap: 12px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
   padding: 12px 16px; border-bottom: 1px solid var(--grid); flex: 0 0 auto;
 }
-.evo-title { color: var(--green); font-weight: 700; letter-spacing: .08em; }
-.evo-sub { color: var(--text-dim); font-size: 11px; flex: 1 1 auto; }
+.evo-title { color: var(--green); font-weight: 700; letter-spacing: .08em;
+  flex: 0 0 auto; margin-right: auto; }
+/* status line gets its own full-width row beneath the controls (never crushed) */
+.evo-sub { color: var(--text-dim); font-size: 11px; flex: 1 1 100%; order: 10;
+  min-width: 0; }
 .evo-close {
   background: none; border: none; color: var(--text-dim); font-size: 22px;
   cursor: pointer; line-height: 1;
