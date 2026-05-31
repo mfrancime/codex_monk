@@ -350,15 +350,39 @@ def _war_start(duration: int = 600, gap: float = 7.0) -> dict:
         return {'ok': True, 'running': True, 'pid': proc.pid, 'duration_s': duration}
 
 
+def _war_mark_stopped():
+    """Force web/war.json to running:false so the UI un-sticks even if the driver
+    died before writing its own final state (the cause of the stuck blinking
+    STOP button)."""
+    wp = os.path.join(ROOT, 'web', 'war.json')
+    try:
+        with open(wp) as f:
+            w = json.load(f)
+    except Exception:
+        w = {'score': {'blue': 0, 'red': 0}, 'fronts': {}, 'log': []}
+    w['running'] = False
+    cur = w.get('current') or {}
+    cur['phase'] = 'calm'
+    w['current'] = cur
+    try:
+        tmp = wp + '.tmp'
+        with open(tmp, 'w') as f:
+            json.dump(w, f)
+        os.replace(tmp, wp)
+    except Exception:
+        pass
+
+
 def _war_stop() -> dict:
     with _WAR_LOCK:
         p = _WAR['proc']
-        if p is None or p.poll() is not None:
-            return {'ok': True, 'running': False, 'note': 'no war running'}
-        try:
-            p.terminate()
-        except Exception:
-            pass
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        _WAR['proc'] = None
+        _war_mark_stopped()      # always un-stick the UI, dead proc or not
         return {'ok': True, 'running': False, 'note': 'ceasefire'}
 
 

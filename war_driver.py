@@ -20,6 +20,7 @@ for the war-room battle view. Eval/orchestration tier; no swarm/ changes.
 import json
 import os
 import random
+import signal
 import struct
 import subprocess
 import sys
@@ -118,7 +119,22 @@ def _award(latency, window):
     return ('blue', 1)
 
 
+def _on_term(*_):
+    """Graceful stop: write running:false so the UI un-sticks immediately."""
+    try:
+        with open(WAR_JSON) as f:
+            w = json.load(f)
+        w['running'] = False
+        (w.get('current') or {}).update(phase='calm')
+        with open(WAR_JSON, 'w') as f:
+            json.dump(w, f)
+    except Exception:
+        pass
+    sys.exit(0)
+
+
 def main():
+    signal.signal(signal.SIGTERM, _on_term)
     duration = int(sys.argv[1]) if len(sys.argv) > 1 else 600
     seed = int(sys.argv[3]) if len(sys.argv) > 3 else int(time.time())
     rng = random.Random(seed)

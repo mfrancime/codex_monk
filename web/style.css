@@ -669,8 +669,9 @@ body[data-defcon="1"] .klaxon {
   letter-spacing:.06em; white-space:nowrap; font-weight:700; transition:background .15s, box-shadow .15s;
 }
 .evo-war:hover { background:#5a1414; box-shadow:0 0 12px -2px var(--red); }
-.evo-war.live { background:var(--red); color:#fff; animation:warpulse 1s infinite; }
+.evo-war.live { background:var(--red); color:#fff; animation:warglow 2.4s ease-in-out infinite; }
 @keyframes warpulse { 0%,100%{box-shadow:0 0 0 0 var(--red);} 50%{box-shadow:0 0 14px 1px var(--red);} }
+@keyframes warglow { 0%,100%{box-shadow:0 0 4px -2px var(--red);} 50%{box-shadow:0 0 10px 0 var(--red);} }
 
 .evo-war-box { margin:10px 0 4px; border-radius:8px; padding:10px 12px;
   border:1px solid var(--grid); background:linear-gradient(180deg, rgba(40,8,8,.4), rgba(8,18,24,.4)); }

@@ -799,6 +799,13 @@ function evoWarBanner(w) {
 async function evoWarPoll() {
   let w = null;
   try { w = await jget('/war.json?_=' + Date.now()); } catch (e) { /* no war yet */ }
+  // A 'running' flag is STALE if the driver hasn't written in >25s (it died /
+  // was killed before writing its final state). Treat it as stopped so the
+  // STOP button can never get stuck blinking.
+  if (w && w.running && w.updated && (Date.now() / 1000 - w.updated) > 25) {
+    w.running = false;
+    if (w.current) w.current.phase = 'calm';
+  }
   const el = $('evo-war-banner');
   if (el) el.innerHTML = w ? evoWarBanner(w) : '';
   const btn = $('evo-war');
@@ -809,11 +816,14 @@ async function evoWarPoll() {
 }
 
 async function evoWarToggle() {
-  let w = null;
-  try { w = await jget('/war.json?_=' + Date.now()); } catch (e) { /* none */ }
-  if (w && w.running) await jpost('/api/war', { action: 'stop' });
+  // Decide from the button's own state (set by the poll) — no slow pre-fetch, so
+  // STOP responds instantly. Optimistically flip the label too.
+  const btn = $('evo-war');
+  const live = btn.classList.contains('live');
+  btn.textContent = live ? '…stopping' : '…starting';
+  if (live) await jpost('/api/war', { action: 'stop' });
   else await jpost('/api/war', { action: 'start', duration: 600, gap: 7 });
-  setTimeout(evoWarPoll, 500);
+  setTimeout(evoWarPoll, 400);
 }
 
 $('evo-toggle').addEventListener('click', () => evoToggle());
