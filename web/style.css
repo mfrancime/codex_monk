@@ -954,3 +954,10 @@ body[data-defcon="1"] .klaxon {
 /* the toggle reads as active while the panel is open */
 .hud-link.active { background: var(--panel-hi); color: var(--green);
   border-color: var(--green); }
+
+/* 🎯 strategy preset badge on RED ARMY (next to the difficulty badge) */
+.wc-strat { font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  padding: 1px 5px; border-radius: 3px; border: 1px solid; }
+.wc-strat.blitz   { color: var(--orange); border-color: #5a3410; }
+.wc-strat.stealth { color: #c060ff; border-color: #4a1a6a; }
+.wc-strat.feint   { color: var(--info); border-color: #1d3a55; }

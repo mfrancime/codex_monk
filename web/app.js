@@ -1027,9 +1027,13 @@ function renderWarConsole(w) {
       `<div class="wc-unit"><span class="wc-front ${holder ? u.holder : 'red'}">${u.front}</span><code>${evoGenomeHTML(u.genome)}</code></div>`;
     const diff = (w.difficulty || 'veteran').toLowerCase();
     const diffBadge = `<span class="wc-diff ${diff}">${diff.toUpperCase()}</span>`;
+    const strat = (w.strategy_preset || 'balanced').toLowerCase();
+    const stratIcon = { balanced: '⚖', blitz: '⚡', stealth: '🥷', feint: '🎭' }[strat] || '⚖';
+    const stratBadge = strat === 'balanced' ? ''
+      : ` <span class="wc-strat ${strat}">${stratIcon} ${strat.toUpperCase()}</span>`;
     teamsEl.innerHTML =
       `<div class="wc-team red">
-        <div class="wc-team-head">🔴 RED ARMY ${diffBadge} · took <b>${red.taken || 0}</b>/5 · 🥷 <b>${red.infiltrations || 0}</b></div>
+        <div class="wc-team-head">🔴 RED ARMY ${diffBadge}${stratBadge} · took <b>${red.taken || 0}</b>/5 · 🥷 <b>${red.infiltrations || 0}</b></div>
         <div class="wc-strat">${w.strategy || red.strategy || 'probing'}</div>
         ${(red.units || []).map((u) => unit(u, false)).join('')}
       </div>
@@ -1106,13 +1110,18 @@ $('wv-dismiss').addEventListener('click', () => { WAR.dismissed = true; hideVict
 $('wv-rematch').addEventListener('click', async () => {
   hideVictory(); WAR.dismissed = true;
   await jpost('/api/war', {
-    action: 'start', duration: 600, gap: 7, difficulty: warDifficulty() });
+    action: 'start', duration: 600, gap: 7,
+    difficulty: warDifficulty(), strategy: warStrategy() });
   setTimeout(evoWarPoll, 400);
 });
 
 function warDifficulty() {
   const sel = $('evo-diff');
   return (sel && sel.value) || 'veteran';
+}
+function warStrategy() {
+  const sel = $('evo-strategy');
+  return (sel && sel.value) || 'balanced';
 }
 
 async function evoWarToggle() {
@@ -1121,7 +1130,8 @@ async function evoWarToggle() {
   btn.textContent = live ? '…stopping' : '…starting';
   if (live) await jpost('/api/war', { action: 'stop' });
   else await jpost('/api/war', {
-    action: 'start', duration: 600, gap: 7, difficulty: warDifficulty() });
+    action: 'start', duration: 600, gap: 7,
+    difficulty: warDifficulty(), strategy: warStrategy() });
   setTimeout(evoWarPoll, 400);
 }
 

@@ -84,6 +84,27 @@ DIFF_CFG = {
 }
 DC = DIFF_CFG.get(DIFFICULTY, DIFF_CFG['veteran'])
 
+# 🎯 STRATEGY — the SHAPE of Red's attack, orthogonal to difficulty (intensity).
+# Same env-config pattern. Modifiers stack on top of the difficulty numbers:
+#   BLITZ   — concentrate fire on one front, tight windows, almost no stealth:
+#             overwhelm fast (high concentrate, low stealth, win×0.7).
+#   STEALTH — spread wide and infiltrate under the radar: win by silent erosion
+#             (negative concentrate = spread, stealth×1.8, slightly longer wars).
+#   FEINT   — telegraph a front to bait the pre-empt, then strike elsewhere next
+#             turn (feint dodge); moderate stealth.
+STRATEGY = os.environ.get('CODEX_WAR_STRATEGY', 'balanced').lower()
+STRAT_CFG = {
+    'balanced': {'concentrate': 0.0,  'stealth_mult': 1.0, 'cap_mult': 1.0,
+                 'win_mult': 1.0, 'feint': 0.0},
+    'blitz':    {'concentrate': 1.0,  'stealth_mult': 0.25, 'cap_mult': 0.4,
+                 'win_mult': 0.7, 'feint': 0.0},
+    'stealth':  {'concentrate': -0.4, 'stealth_mult': 1.8, 'cap_mult': 1.3,
+                 'win_mult': 1.1, 'feint': 0.0},
+    'feint':    {'concentrate': 0.0,  'stealth_mult': 0.7, 'cap_mult': 0.8,
+                 'win_mult': 1.0, 'feint': 0.6},
+}
+SC = STRAT_CFG.get(STRATEGY, STRAT_CFG['balanced'])
+
 
 class RedSwarm:
     """Red army as a live fabric of attacker units (no new agent class — the war
@@ -200,10 +221,12 @@ def _pick_target(fronts, rng):
     """Red presses the SOFTEST front (breaches + infiltrations, low reinforcement,
     low health) — but ABANDONS a front it's already taken to go take the next,
     so the assault spreads instead of overkilling one corpse."""
-    if rng.random() < DC['soft_p']:
+    soft_p = max(0.3, min(0.98, DC['soft_p'] + SC['concentrate'] * 0.25))
+    if rng.random() < soft_p:
+        tf = 1.0 - max(0.0, SC['concentrate'])   # blitz keeps hammering a corpse
         def soft(p):
             v = fronts[p[0]]
-            taken = -60 if v['health'] < 25 else -v['health'] * 0.02
+            taken = (-60 if v['health'] < 25 else -v['health'] * 0.02) * tf
             return v['breaches'] + v['stealth'] * 0.6 - v['defense'] * 0.9 + taken
         return max(PLAYBOOK, key=soft)
     return rng.choice(PLAYBOOK)
@@ -248,6 +271,7 @@ def main():
     score = {'blue': 0, 'red': 0, 'prevented': 0, 'infiltrated': 0}
     log = []
     turn = 0
+    feint_dodge = None      # 🎯 FEINT: front to avoid next turn after baiting a pre-empt
 
     try:
         red = RedSwarm()
@@ -297,7 +321,7 @@ def main():
                 'strategy': strategy, 'battlefield': battlefield(active),
                 'armies': armies(strategy), 'governor': _governor(),
                 'blue_fabric': FABRIC, 'red_fabric': RED_FABRIC,
-                'difficulty': DIFFICULTY,
+                'difficulty': DIFFICULTY, 'strategy_preset': STRATEGY,
                 'log': log[-24:], 'duration_s': duration, 'ends_at': deadline})
 
     _inject('healthy')
@@ -309,8 +333,12 @@ def main():
         turn += 1
         wave = turn // WAVE_TURNS
         base = max(1, round(WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
-                            * DC['win_mult']))
+                            * DC['win_mult'] * SC['win_mult']))
         front, aid, label, want_code, _g = _pick_target(fronts, rng)
+        if feint_dodge and front == feint_dodge:        # 🎯 the feint pays off
+            alts = [pb for pb in PLAYBOOK if pb[0] != feint_dodge]
+            front, aid, label, want_code, _g = rng.choice(alts)
+        feint_dodge = None
         defense = fronts[front]['defense']
         window = min(12, base + defense)
         strat = (f'wave {wave + 1}: base squeeze {base}s · storming {front}'
@@ -318,8 +346,9 @@ def main():
 
         # 🥷 STEALTH — more likely as the war drags on. Red slips UNDER the
         # detector's threshold for silent erosion. Only a tighter genome catches it.
-        if front in STEALTH and rng.random() < min(DC['stealth_cap'],
-                                                   DC['stealth_base'] * (wave + 1)):
+        stealth_p = min(DC['stealth_cap'] * SC['cap_mult'],
+                        DC['stealth_base'] * (wave + 1) * SC['stealth_mult'])
+        if front in STEALTH and rng.random() < stealth_p:
             _r('beat')
             _r('attack', front, 'stealth infiltration')
             snap({'front': front, 'attack': 'going dark', 'phase': 'stealth'},
@@ -389,6 +418,8 @@ def main():
                      strategy=strat, active=front)
                 _inject('healthy')
                 _r('idle', front)
+                if SC['feint'] and rng.random() < SC['feint']:
+                    feint_dodge = front                # baited the pre-empt → strike elsewhere next
                 time.sleep(max(1.5, base * 0.4))
                 continue                               # breach never lands
 
@@ -461,7 +492,8 @@ def main():
             'wave': turn // WAVE_TURNS + 1, 'battlefield': battlefield(),
             'armies': armies(), 'governor': _governor(),
             'log': log[-24:], 'duration_s': duration, 'ends_at': time.time(),
-            'difficulty': DIFFICULTY, 'winner': winner, 'mvp': mvp,
+            'difficulty': DIFFICULTY, 'strategy_preset': STRATEGY,
+            'winner': winner, 'mvp': mvp,
             'summary': (f'🗺️ {blue_holds}/{len(fronts)} fronts held by Blue · '
                         f'🏅 MVP: {mvp} ({fronts[mvp]["blocks"] + fronts[mvp]["preempts"]}) · '
                         + (f'🥷 Red took: {", ".join(fell)}' if fell
