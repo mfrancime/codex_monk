@@ -329,7 +329,21 @@
       });
       if (bf) tagUnits(bf, teamColor({ path: bf }));
       if (rf) tagUnits(rf, teamColor({ path: rf }));
+      // territory HP bars on the Blue sphere
+      if (bf && hubs[bf] && w.battlefield) {
+        ensureFrontBars(hubs[bf], Object.keys(w.battlefield));
+        updateFrontBars(hubs[bf], w.battlefield);
+      }
     }
+  }
+
+  // world position of a Blue front's territory bar (beam aim point), or null
+  function frontWorldPos(blue, front) {
+    const fb = blue && blue._frontBars && blue._frontBars[front];
+    if (!fb) return null;
+    const v = new THREE.Vector3();
+    fb.holder.getWorldPosition(v);
+    return v;
   }
 
   function spawnProjectile(from, to, phase) {
@@ -345,6 +359,7 @@
     spr.userData = { from: from.clone(), to: to.clone(), t: 0 };
     scene.add(spr);
     projectiles.push(spr);
+    window.__war3dProjSpawned = (window.__war3dProjSpawned || 0) + 1;
   }
 
   function updateProjectiles(dt) {
@@ -359,7 +374,59 @@
     }
   }
 
-  function flashHub(rec, hex) { if (rec) { rec.flashT = 0.7; rec.flashHex = hex; } }
+  function flashHub(rec, hex) {
+    if (rec) {
+      rec.flashT = 0.7; rec.flashHex = hex;
+      window.__war3dFlashes = (window.__war3dFlashes || 0) + 1;
+    }
+  }
+
+  // 🗺️ TERRITORY — the 4 k8s fronts as HP bars ringing the Blue sphere. Each
+  // drains with its front's health and recolors by holder (blue held → amber
+  // contested → red fallen), so the cluster's ground war is legible ON the
+  // battlefield, not just in the console. ~8 objects, attached to the blue hub.
+  const _frontOrder = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
+  function frontHolderColor(h) {
+    return h === 'blue' ? 0x5fb8ff : (h === 'red' ? 0xff3030 : 0xffb300);
+  }
+  function ensureFrontBars(rec, fronts) {
+    if (rec._frontBars) return;
+    rec._frontBars = {};
+    const order = fronts.slice().sort(
+      (a, b) => (_frontOrder.indexOf(a) + 1 || 99) - (_frontOrder.indexOf(b) + 1 || 99));
+    order.forEach((f, i) => {
+      const a = (i / order.length) * Math.PI * 2;
+      const R = 11;
+      const holder = new THREE.Group();
+      holder.position.set(Math.cos(a) * R, -3, Math.sin(a) * R);
+      const bar = new THREE.Mesh(
+        new THREE.BoxGeometry(0.8, 6, 0.8),
+        new THREE.MeshStandardMaterial({
+          color: 0x5fb8ff, emissive: 0x5fb8ff, emissiveIntensity: 0.9,
+          roughness: 0.4, metalness: 0.3 }));
+      bar.position.y = 3;
+      holder.add(bar);
+      const lab = makeUnitTag(f, 0x9fd8ff);
+      lab.position.set(0, 7.4, 0);
+      holder.add(lab);
+      rec.group.add(holder);
+      rec._frontBars[f] = { holder, bar };
+    });
+    window.__war3dFrontBars = Object.keys(rec._frontBars).length;
+  }
+  function updateFrontBars(rec, bf) {
+    if (!rec._frontBars) return;
+    Object.keys(rec._frontBars).forEach((f) => {
+      const c = bf[f]; if (!c) return;
+      const { bar } = rec._frontBars[f];
+      const h = Math.max(0.05, (c.health || 0) / 100);
+      bar.scale.y = h;
+      bar.position.y = 3 * h;                 // keep the base anchored at 0
+      const col = frontHolderColor(c.holder);
+      bar.material.color.setHex(col);
+      bar.material.emissive.setHex(col);
+    });
+  }
 
   function stepBattle(dt) {
     if (!warState || !warState.running) return;
@@ -369,7 +436,8 @@
     const ph = cur.phase || '';
     if (cur.phase !== _warPhase || warState.turn !== _warTurn) {
       if (blue && red && ['attacking', 'stealth', 'preempting'].includes(ph)) {
-        spawnProjectile(red.pos, blue.pos, ph);
+        const aim = frontWorldPos(blue, cur.front) || blue.pos;  // hit the front
+        spawnProjectile(red.pos, aim, ph);
       }
       if (['breached', 'stealth_hit'].includes(ph)) flashHub(blue, 0xff3030);
       else if (['blocked', 'preempted'].includes(ph)) flashHub(blue, 0x4dff7c);
