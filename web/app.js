@@ -769,8 +769,11 @@ function evoWarBanner(w) {
     const ff = fronts[f];
     const act = (cur.front === f && w.running) ? 'active ' + phase : '';
     const res = ff.last === 'BREACH' ? 'breach' : ff.last === 'BLOCKED' ? 'block' : '';
-    return `<span class="war-front ${act} ${res}">${f}<small>🔵${ff.blocks} 🔴${ff.breaches}</small></span>`;
+    const fort = ff.defense ? 'fortified' : '';
+    const shield = ff.defense ? `<span class="war-shield" title="Blue reinforcement (+${ff.defense}s reaction)">🛡️${ff.defense}</span>` : '';
+    return `<span class="war-front ${act} ${res} ${fort}">${f}<small>🔵${ff.blocks} 🔴${ff.breaches}</small>${shield}</span>`;
   }).join('');
+  const summary = (!w.running && w.summary) ? `<div class="war-summary">${w.summary}</div>` : '';
   const log = (w.log || []).slice(-6).reverse().map((l) =>
     `<div class="war-log-row">t${l.turn} · <b>${l.front}</b> ${l.attack} → ${l.result}</div>`).join('');
   return `<div class="evo-war-box ${w.running ? 'live' : 'over'}">
@@ -782,6 +785,7 @@ function evoWarBanner(w) {
     <div class="war-phase ${phase}">${phaseText}</div>
     ${strat}
     <div class="war-fronts">${tiles}</div>
+    ${summary}
     <div class="war-log">${log}</div>
   </div>`;
 }

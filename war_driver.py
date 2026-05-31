@@ -96,11 +96,13 @@ WAVE_TURNS = 3
 
 
 def _pick_target(fronts, rng):
-    """Red strategy: 65% press the WEAKEST front (most net breaches), else feint
-    at a random one. Adaptive pressure with misdirection."""
-    if rng.random() < 0.65:
+    """Red strategy: 70% press the SOFTEST front (most net breaches, but LOW Blue
+    reinforcement), else feint. Red seeks gaps and steers AROUND reinforced
+    fronts — so Blue's reinforcement actually redirects the assault."""
+    if rng.random() < 0.70:
         return max(PLAYBOOK, key=lambda p:
-                   fronts[p[0]]['breaches'] - fronts[p[0]]['blocks'] * 0.25)
+                   fronts[p[0]]['breaches'] - fronts[p[0]]['defense'] * 0.9
+                   - fronts[p[0]]['blocks'] * 0.1)
     return rng.choice(PLAYBOOK)
 
 
@@ -122,7 +124,8 @@ def main():
     rng = random.Random(seed)
     deadline = time.time() + duration
 
-    fronts = {f: {'blocks': 0, 'breaches': 0, 'last': '—'} for f, _, _, _ in PLAYBOOK}
+    fronts = {f: {'blocks': 0, 'breaches': 0, 'last': '—', 'defense': 0}
+              for f, _, _, _ in PLAYBOOK}
     score = {'blue': 0, 'red': 0}
     log = []
     turn = 0
@@ -142,18 +145,21 @@ def main():
     while time.time() < deadline:
         turn += 1
         wave = turn // WAVE_TURNS
-        window = WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
+        base = WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
         front, aid, label, want_code = _pick_target(fronts, rng)
-        weakest = max(fronts, key=lambda f: fronts[f]['breaches'])
-        strat = (f'wave {wave + 1}: squeeze Blue to {window}s · pressing {front}'
-                 + (f' (weak spot: {weakest})' if fronts[weakest]['breaches'] else ''))
+        defense = fronts[front]['defense']
+        window = min(12, base + defense)        # 🔵 reinforcements widen the window
+        soft = min(fronts, key=lambda f: fronts[f]['defense'])
+        strat = (f'wave {wave + 1}: base squeeze {base}s · pressing {front}'
+                 + (f' · 🛡️ Blue reinforced +{defense}s here' if defense
+                    else (f' · seeking soft spot' if any(v['defense'] for v in fronts.values()) else '')))
 
         # 🔴 Red strikes
         snap({'front': front, 'attack': label, 'phase': 'attacking'}, 'attacking',
              wave=wave + 1, react_window=window, strategy=strat)
         _inject(front)
 
-        # 🔵 Blue gets `window` seconds — poll, recording latency-to-block
+        # 🔵 Blue gets `window` seconds (base squeeze + its reinforcement here)
         t0 = time.time()
         sev = code = None
         latency = None
@@ -165,16 +171,22 @@ def main():
                 break
 
         team, pts = _award(latency, window)
+        # reinforcements redeploy from the quiet fronts each turn
+        for f in fronts:
+            if f != front:
+                fronts[f]['defense'] = max(0, fronts[f]['defense'] - 1)
         if team == 'blue':
             score['blue'] += pts
             fronts[front]['blocks'] += 1
             fronts[front]['last'] = 'BLOCKED'
+            fronts[front]['defense'] = max(0, defense - 1)        # threat passed, ease off
             result, phase = f'🔵 BLOCK +{pts} ({sev}:{code} in {latency}s)', 'blocked'
         else:
             score['red'] += pts
             fronts[front]['breaches'] += 1
             fronts[front]['last'] = 'BREACH'
-            result, phase = f'🔴 BREACH +{pts} (Blue too slow at {window}s)', 'breached'
+            fronts[front]['defense'] = min(8, defense + 3)        # 🛡️ Blue rushes reinforcements
+            result, phase = f'🔴 BREACH +{pts} → 🛡️ Blue reinforces {front}', 'breached'
 
         log.append({'turn': turn, 'front': front, 'attack': label, 'result': result})
         snap({'front': front, 'attack': label, 'phase': phase,
@@ -185,11 +197,18 @@ def main():
         time.sleep(max(1.5, window * 0.4))
 
     _inject('healthy')
+    winner = 'BLUE' if score['blue'] > score['red'] else (
+        'RED' if score['red'] > score['blue'] else 'DRAW')
+    mvp = max(fronts, key=lambda f: fronts[f]['blocks']) if fronts else None
+    weakest = max(fronts, key=lambda f: fronts[f]['breaches']) if fronts else None
     _write({'running': False, 'turn': turn, 'score': score, 'fronts': fronts,
             'current': {'front': '—', 'attack': 'war over', 'phase': 'calm'},
             'wave': turn // WAVE_TURNS + 1, 'log': log[-24:], 'duration_s': duration,
-            'ends_at': time.time(),
-            'winner': 'BLUE' if score['blue'] >= score['red'] else 'RED'})
+            'ends_at': time.time(), 'winner': winner,
+            'mvp': mvp, 'weakest': weakest,
+            'summary': (f'🏅 MVP defender: {mvp} ({fronts[mvp]["blocks"]} blocks) · '
+                        f'softest front: {weakest} ({fronts[weakest]["breaches"]} breaches)')
+                       if mvp else ''})
 
 
 if __name__ == '__main__':
