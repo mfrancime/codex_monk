@@ -346,7 +346,7 @@
     return v;
   }
 
-  function spawnProjectile(from, to, phase) {
+  function spawnProjectile(from, to, phase, front) {
     if (projectiles.length > 20) return;
     const hex = phase === 'stealth' ? 0xb030ff
       : phase === 'preempting' ? 0x5fb8ff : 0xff3030;
@@ -356,7 +356,7 @@
     }));
     spr.scale.set(3.4, 3.4, 1);
     spr.position.copy(from);
-    spr.userData = { from: from.clone(), to: to.clone(), t: 0 };
+    spr.userData = { from: from.clone(), to: to.clone(), t: 0, hex, front };
     scene.add(spr);
     projectiles.push(spr);
     window.__war3dProjSpawned = (window.__war3dProjSpawned || 0) + 1;
@@ -367,11 +367,49 @@
       const s = projectiles[i];
       s.userData.t += dt * 1.5;
       const tt = s.userData.t;
-      if (tt >= 1) { scene.remove(s); projectiles.splice(i, 1); continue; }
+      if (tt >= 1) {                              // ⚡ the round LANDS
+        onImpact(s.userData.to, s.userData.hex, s.userData.front);
+        scene.remove(s); projectiles.splice(i, 1); continue;
+      }
       s.position.lerpVectors(s.userData.from, s.userData.to, tt);
       s.position.y += Math.sin(tt * Math.PI) * 7;
       s.material.opacity = 0.95 * (1 - tt * 0.4);
     }
+  }
+
+  // ⚡ IMPACT JUICE — a beam reaching a front blooms a burst and recoils the
+  // struck territory bar. Short-lived additive sprites, capped, so it stays
+  // light. This is the hit-feedback that makes the ground war feel physical.
+  const bursts = [];
+  function spawnBurst(pos, hex) {
+    if (bursts.length > 12) return;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: hex, transparent: true, opacity: 1,
+      depthTest: false, blending: THREE.AdditiveBlending,
+    }));
+    spr.scale.set(2, 2, 1);
+    spr.position.copy(pos);
+    spr.userData = { t: 0 };
+    scene.add(spr);
+    bursts.push(spr);
+    window.__war3dBursts = (window.__war3dBursts || 0) + 1;
+  }
+  function updateBursts(dt) {
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const s = bursts[i];
+      s.userData.t += dt * 3.2;
+      const tt = s.userData.t;
+      if (tt >= 1) { scene.remove(s); bursts.splice(i, 1); continue; }
+      const sc = 2 + tt * 11;
+      s.scale.set(sc, sc, 1);
+      s.material.opacity = 1 - tt;
+    }
+  }
+  function onImpact(pos, hex, front) {
+    spawnBurst(pos, hex);
+    const blue = warState && hubs[warState.blue_fabric];
+    const fb = blue && blue._frontBars && blue._frontBars[front];
+    if (fb) fb.bar.userData.hitT = 0.4;          // recoil this territory bar
   }
 
   function flashHub(rec, hex) {
@@ -429,6 +467,8 @@
   }
 
   function stepBattle(dt) {
+    updateProjectiles(dt);                       // in-flight rounds + impacts
+    updateBursts(dt);                            // impact blooms (even post-war)
     if (!warState || !warState.running) return;
     const blue = hubs[warState.blue_fabric];
     const red = hubs[warState.red_fabric];
@@ -437,13 +477,26 @@
     if (cur.phase !== _warPhase || warState.turn !== _warTurn) {
       if (blue && red && ['attacking', 'stealth', 'preempting'].includes(ph)) {
         const aim = frontWorldPos(blue, cur.front) || blue.pos;  // hit the front
-        spawnProjectile(red.pos, aim, ph);
+        spawnProjectile(red.pos, aim, ph, cur.front);
       }
       if (['breached', 'stealth_hit'].includes(ph)) flashHub(blue, 0xff3030);
       else if (['blocked', 'preempted'].includes(ph)) flashHub(blue, 0x4dff7c);
       _warPhase = cur.phase; _warTurn = warState.turn;
     }
-    updateProjectiles(dt);
+    // ⚡ decay territory-bar recoil (set on impact) — a quick bright width-pop
+    if (blue && blue._frontBars) {
+      Object.values(blue._frontBars).forEach((fb) => {
+        const b = fb.bar;
+        if (b.userData.hitT > 0) {
+          b.userData.hitT = Math.max(0, b.userData.hitT - dt);
+          const k = b.userData.hitT / 0.4;
+          b.material.emissiveIntensity = 0.9 + k * 3;
+          b.scale.x = 1 + k * 0.6; b.scale.z = 1 + k * 0.6;
+        } else if (b.scale.x !== 1) {
+          b.material.emissiveIntensity = 0.9; b.scale.x = 1; b.scale.z = 1;
+        }
+      });
+    }
   }
 
   function animate() {
