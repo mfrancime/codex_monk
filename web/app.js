@@ -564,6 +564,16 @@ function evoLeaderboard(fronts, names) {
     return { n, f, s, battle, holding };
   }).sort((a, b) => b.battle - a.battle);
   const medal = ['🥇', '🥈', '🥉'];
+  const liveFronts = (WAR.record && WAR.record.fronts) || {};
+  const liveBadge = (name) => {
+    const fb = liveFronts[name];
+    if (!fb || (fb.held + fb.lost) === 0) {
+      return '<span class="lb-live none" title="no live START WAR battles fought on this front yet">🗺️ —</span>';
+    }
+    const total = fb.held + fb.lost;
+    const rate = Math.round((fb.held / total) * 100);
+    return `<span class="lb-live ${fb.held >= fb.lost ? 'ok' : 'bad'}" title="live START WAR record across matches: ${fb.held} held / ${fb.lost} lost (${rate}% hold)${fb.infil ? ' · ' + fb.infil + ' stealth infiltrations suffered' : ''}">🗺️ ${fb.held}–${fb.lost}${fb.infil ? ' 🥷' + fb.infil : ''}</span>`;
+  };
   const body = rows.map((r, i) => `
     <div class="lb-row ${r.holding ? 'hold' : 'breach'}">
       <span class="lb-rank">${medal[i] || '#' + (i + 1)}</span>
@@ -572,11 +582,16 @@ function evoLeaderboard(fronts, names) {
       <span class="lb-stat" title="rounds won (score 0)">${Math.round((r.s.win_rate || 0) * 100)}%</span>
       <span class="lb-stat" title="Red escalations survived → re-mastered">⚔️${r.s.breaks_survived || 0}</span>
       <span class="lb-stat" title="DNA edit-distance churn — how much it evolved">🧬${r.s.dna_churn || 0}</span>
+      ${liveBadge(r.n)}
       <span class="lb-badge ${r.holding ? 'ok' : 'bad'}">${r.holding ? 'HOLDING' : 'BREACHED'}</span>
     </div>`).join('');
   const blue = rows.filter((r) => r.holding).length;
+  const matches = (WAR.record.red || 0) + (WAR.record.blue || 0);
+  const liveNote = matches
+    ? ` · 🗺️ ${matches} live battle${matches === 1 ? '' : 's'} fought`
+    : ' · 🗺️ no live battles yet';
   return `<div class="evo-lb">
-    <div class="evo-lb-head">🏆 LEADERBOARD · 🔵 Blue holds ${blue}/${rows.length} fronts</div>
+    <div class="evo-lb-head">🏆 LEADERBOARD · 🔵 Blue holds ${blue}/${rows.length} fronts${liveNote}</div>
     ${body}</div>`;
 }
 
@@ -769,8 +784,11 @@ function loadRecord() {
   let r = null;
   try { r = JSON.parse(localStorage.getItem(WAR_REC_KEY) || 'null'); } catch (e) { /* ignore */ }
   if (!r || typeof r !== 'object') r = {};
-  return Object.assign(
-    { blue: 0, red: 0, sBlue: 0, sRed: 0, bestOf: 5, streakTeam: null, streak: 0 }, r);
+  const rec = Object.assign(
+    { blue: 0, red: 0, sBlue: 0, sRed: 0, bestOf: 5, streakTeam: null, streak: 0,
+      fronts: {} }, r);
+  if (!rec.fronts || typeof rec.fronts !== 'object') rec.fronts = {};
+  return rec;
 }
 function saveRecord(r) {
   try { localStorage.setItem(WAR_REC_KEY, JSON.stringify(r)); } catch (e) { /* ignore */ }
@@ -787,6 +805,24 @@ function recordResult(winner) {
   const clinch = r.sRed >= need ? 'RED' : (r.sBlue >= need ? 'BLUE' : null);
   saveRecord(r);
   return clinch;        // non-null → series won; caller resets for a new series
+}
+
+// Per-front territorial outcome of a finished match (final holder by health),
+// accumulated across matches so the leaderboard can show who actually wins the
+// ground war — not just who evolves a clean detector in the lab.
+function recordFronts(w) {
+  const r = WAR.record;
+  if (!r.fronts) r.fronts = {};
+  const bf = w.battlefield || {};
+  Object.keys(bf).forEach((f) => {
+    const c = bf[f];
+    const fr = r.fronts[f] || { held: 0, lost: 0, infil: 0, preempt: 0 };
+    if ((c.health || 0) >= 50) fr.held++; else fr.lost++;   // war_driver's 50hp line
+    fr.infil += c.stealth || 0;
+    fr.preempt += c.preempts || 0;
+    r.fronts[f] = fr;
+  });
+  saveRecord(r);
 }
 function renderSeries() {
   const el = $('wc-series');
@@ -1059,6 +1095,7 @@ function maybeShowVictory(w) {
   if (running) { WAR.wasRunning = true; WAR.dismissed = false; hideVictory(); return; }
   if (w && w.winner && WAR.wasRunning && !WAR.dismissed) {
     const clinch = recordResult(w.winner);   // tally the result once per match
+    recordFronts(w);                         // + per-front territorial outcome
     showVictory(w, clinch);
     if (clinch) { WAR.record.sBlue = 0; WAR.record.sRed = 0; saveRecord(WAR.record); }
     renderSeries();
