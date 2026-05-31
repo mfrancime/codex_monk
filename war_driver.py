@@ -49,6 +49,73 @@ PLAYBOOK = [
 WAVE_WINDOWS = [9, 6, 4, 3, 2, 2]
 WAVE_TURNS = 3
 
+# Red is a REAL swarm: war_driver (Red's command) maintains codex.red.fabric with
+# one attacker unit per front — a live agent with an "attack genome" (its vector)
+# and live status. The war-room shows it as a swarm sphere you can inspect, just
+# like Blue. Symbolic attack DNA (↑ drive up, ↓ drive down the signal it abuses):
+RED_FABRIC = '/dev/shm/codex.red.fabric'
+ATTACK_DNA = {'pods': 'Πo↑Πm↑→breach', 'nodes': 'Ωr↑→breach',
+              'apiserver': 'Ka↓→breach', 'scheduler': 'Kd↑→breach'}
+
+
+class RedSwarm:
+    """Red army as a live fabric of attacker units (no new agent class — the war
+    command writes its units' control blocks + state directly)."""
+
+    def __init__(self):
+        from swarm.fabric import (Fabric, ACB_TYPE, ACB_STATE, ACB_PID,
+                                  ACB_HEARTBEAT, S_RUNNING)
+        from swarm import dna_storage
+        self._A = (ACB_TYPE, ACB_STATE, ACB_PID, ACB_HEARTBEAT, S_RUNNING)
+        try:
+            os.remove(RED_FABRIC)
+        except OSError:
+            pass
+        self.fab = Fabric(path=RED_FABRIC, create=True)
+        self.units = {}
+        for i, (f, *_rest) in enumerate(PLAYBOOK, start=1):
+            self.units[f] = i
+            self.fab.acb_w(i, ACB_TYPE, 7)
+            self.fab.acb_w(i, ACB_STATE, S_RUNNING)
+            self.fab.acb_w(i, ACB_PID, os.getpid(), '<I')
+            self.fab.acb_w(i, ACB_HEARTBEAT, int(time.time()), '<Q')
+            dna_storage.write(self.fab, i, ATTACK_DNA.get(f, '?'), writer=i)
+            self.fab.state_set('sys.mode', 'red-attacker', i)
+            self.fab.state_set('red.target', f, i)
+            self.fab.state_set('red.status', 'ready', i)
+            self.fab.state_set('sys.sev', 'OK', i)
+            self.fab.state_set('sys.code', 'OK', i)
+
+    def _set(self, front, status, sev, code, **kv):
+        i = self.units[front]
+        self.fab.acb_w(i, self._A[3], int(time.time()), '<Q')   # ACB_HEARTBEAT
+        self.fab.state_set('red.status', status, i)
+        self.fab.state_set('sys.sev', sev, i)
+        self.fab.state_set('sys.code', code, i)
+        for k, v in kv.items():
+            self.fab.state_set(k, str(v)[:20], i)
+
+    def beat(self):
+        for i in self.units.values():
+            self.fab.acb_w(i, self._A[3], int(time.time()), '<Q')
+
+    def attack(self, front, label):
+        self._set(front, 'ATTACKING', 'WARN', 'ASSAULT', **{'red.attack': label})
+
+    def result(self, front, breached):
+        self._set(front, 'BREACHED' if breached else 'REPELLED',
+                  'CRITICAL' if breached else 'OK',
+                  'BREACH' if breached else 'REPELLED')
+
+    def idle(self, front):
+        self._set(front, 'ready', 'OK', 'OK')
+
+    def close(self):
+        try:
+            self.fab.close()
+        except Exception:
+            pass
+
 
 def _inject(state):
     subprocess.run([PY, os.path.join(ROOT, 'deploy_telemetry.py'), state, FX],
@@ -151,6 +218,18 @@ def main():
     log = []
     turn = 0
 
+    try:
+        red = RedSwarm()
+    except Exception:
+        red = None
+
+    def _r(method, *a):
+        if red:
+            try:
+                getattr(red, method)(*a)
+            except Exception:
+                pass
+
     def battlefield(active=None):
         return {f: {'holder': _holder(v['health']), 'health': v['health'],
                     'under_attack': (f == active), 'verdict': v['verdict'],
@@ -164,8 +243,9 @@ def main():
                        'blocks': v['blocks'], 'breaches': v['breaches'],
                        'holder': _holder(v['health'])}
                       for f, v in fronts.items()]
-        red_units = [{'front': f, 'target': f, 'breaches': v['breaches'],
-                      'pressure': v['defense']} for f, v in fronts.items()]
+        red_units = [{'front': f, 'target': f, 'genome': ATTACK_DNA.get(f, '?'),
+                      'breaches': v['breaches'], 'pressure': v['defense']}
+                     for f, v in fronts.items()]
         return {
             'blue': {'name': 'BLUE — k8s_deployed champions',
                      'commander': 'governor', 'units': blue_units,
@@ -182,7 +262,7 @@ def main():
                 'react_window': WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)],
                 'strategy': strategy, 'battlefield': battlefield(active),
                 'armies': armies(strategy), 'governor': _governor(),
-                'blue_fabric': FABRIC,
+                'blue_fabric': FABRIC, 'red_fabric': RED_FABRIC,
                 'log': log[-24:], 'duration_s': duration, 'ends_at': deadline})
 
     _inject('healthy')
@@ -200,7 +280,9 @@ def main():
         strat = (f'wave {wave + 1}: base squeeze {base}s · storming {front}'
                  + (f' · 🛡️ Blue reinforced +{defense}s' if defense else ''))
 
-        # 🔴 Red strikes
+        # 🔴 Red strikes — its attacker unit goes live in codex.red.fabric
+        _r('beat')
+        _r('attack', front, label)
         snap({'front': front, 'attack': label, 'phase': 'attacking'},
              'attacking', strategy=strat, active=front)
         _inject(front)
@@ -216,6 +298,7 @@ def main():
                 break
 
         team, pts = _award(latency, window)
+        _r('result', front, team == 'red')
         for f in fronts:
             if f != front:
                 fronts[f]['defense'] = max(0, fronts[f]['defense'] - 1)
@@ -243,9 +326,11 @@ def main():
              phase, strategy=strat, active=front)
 
         _inject('healthy')
+        _r('idle', front)
         time.sleep(max(1.5, window * 0.4))
 
     _inject('healthy')
+    _r('beat')
     winner = 'BLUE' if score['blue'] > score['red'] else (
         'RED' if score['red'] > score['blue'] else 'DRAW')
     mvp = max(fronts, key=lambda f: fronts[f]['blocks'])

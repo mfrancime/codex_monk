@@ -837,6 +837,7 @@ function evoWarSelect(front) {
   if (!w || !w.battlefield || !w.battlefield[front]) { el.innerHTML = ''; return; }
   const c = w.battlefield[front];
   const bu = ((w.armies && w.armies.blue && w.armies.blue.units) || []).find((u) => u.front === front) || {};
+  const ru = ((w.armies && w.armies.red && w.armies.red.units) || []).find((u) => u.front === front) || {};
   const cur = w.current || {};
   const atk = (cur.front === front && w.running) ? cur.attack : 'probing for an opening';
   el.innerHTML = `<div class="bf-detail">
@@ -844,7 +845,7 @@ function evoWarSelect(front) {
       <button class="bf-close" type="button">×</button></div>
     <div class="bf-row"><span class="bf-lbl blue">🔵 DEFENDER</span> <code class="bf-gene">${evoGenomeHTML(bu.genome || '')}</code></div>
     <div class="bf-row"><span class="bf-lbl">status</span> ${c.verdict} · holds ${c.blocks} · breaches ${c.breaches} · 🛡️ reinforcement +${c.defense || 0}s</div>
-    <div class="bf-row"><span class="bf-lbl red">🔴 ATTACKER</span> ${atk}</div>
+    <div class="bf-row"><span class="bf-lbl red">🔴 ATTACKER</span> ${atk}${ru.genome ? ' · <code class="bf-gene">' + ru.genome + '</code>' : ''}</div>
     <div class="bf-inject">
       <input class="bf-genome-in" id="bf-gin" placeholder="custom genome for ${front}…" spellcheck="false">
       <button class="bf-deploy" type="button" data-aid="${bu.aid}">⚡ DEPLOY</button>
