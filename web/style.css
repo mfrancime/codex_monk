@@ -637,3 +637,65 @@ body[data-defcon="1"] .klaxon {
 .evo-teamline.red  { border-left: 2px solid var(--red); padding-left: 6px; margin-left: -2px; }
 .evo-teamline.blue { border-left: 2px solid var(--info); padding-left: 6px; margin-left: -2px; }
 .evo-hold b { color: var(--info); }
+
+/* 🏆 LEADERBOARD + ⚙️ LIVE FORCES (battle view) */
+.evo-lb { border:1px solid var(--green-soft); border-radius:8px; padding:8px 10px; margin-bottom:12px; background:rgba(10,20,10,.5); }
+.evo-lb-head { color:var(--green); font-size:11px; font-weight:700; letter-spacing:.06em; margin-bottom:6px; }
+.lb-row { display:grid; grid-template-columns:26px 1fr 150px 40px 38px 46px 64px; gap:7px; align-items:center; font-size:11px; padding:3px 0; border-top:1px solid var(--grid); }
+.lb-row:first-of-type { border-top:none; }
+.lb-rank { font-size:14px; text-align:center; }
+.lb-name { color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-gene { font-family:var(--mono); font-size:10px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.lb-stat { font-family:var(--mono); font-size:10px; color:var(--green-dim); text-align:right; }
+.lb-badge { font-size:8px; padding:2px 5px; border-radius:4px; text-align:center; letter-spacing:.04em; }
+.lb-badge.ok { background:var(--green-soft); color:var(--green); animation:lbpulse 2.2s infinite; }
+.lb-badge.bad { background:#3a0e0e; color:var(--red-glow); animation:lbflash .8s infinite; }
+@keyframes lbpulse { 0%,100%{box-shadow:0 0 0 0 transparent;} 50%{box-shadow:0 0 9px -1px var(--green-dim);} }
+@keyframes lbflash { 0%,100%{opacity:1;} 50%{opacity:.45;} }
+.lb-row.breach { background:rgba(60,14,14,.22); }
+
+.evo-forces { border:1px dashed var(--grid); border-radius:8px; padding:7px 10px; margin-bottom:12px; }
+.evo-forces-head { color:var(--info); font-size:10px; letter-spacing:.06em; margin-bottom:5px; }
+.force-roles { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:5px; }
+.force-chip { font-size:9px; font-family:var(--mono); padding:2px 6px; border-radius:4px; background:var(--panel-hi); color:var(--text); border:1px solid var(--grid); }
+.force-chip.off { color:var(--text-dim); opacity:.5; }
+.force-fab { font-size:9px; color:var(--text-dim); display:block; }
+.force-fab b { color:var(--text); }
+
+/* ⚔ START WAR button + autonomous battle banner */
+.evo-war {
+  background:#3a0e0e; border:1px solid #6a1a1a; color:var(--red-glow);
+  font:inherit; font-size:11px; cursor:pointer; padding:3px 10px; border-radius:4px;
+  letter-spacing:.06em; white-space:nowrap; font-weight:700; transition:background .15s, box-shadow .15s;
+}
+.evo-war:hover { background:#5a1414; box-shadow:0 0 12px -2px var(--red); }
+.evo-war.live { background:var(--red); color:#fff; animation:warpulse 1s infinite; }
+@keyframes warpulse { 0%,100%{box-shadow:0 0 0 0 var(--red);} 50%{box-shadow:0 0 14px 1px var(--red);} }
+
+.evo-war-box { margin:10px 0 4px; border-radius:8px; padding:10px 12px;
+  border:1px solid var(--grid); background:linear-gradient(180deg, rgba(40,8,8,.4), rgba(8,18,24,.4)); }
+.evo-war-box.live { border-color:#6a1a1a; box-shadow:0 0 18px -8px var(--red); }
+.evo-war-box.over { border-color:var(--green-soft); }
+.war-score { display:flex; align-items:center; justify-content:space-between; font-size:13px; }
+.war-side.red { color:var(--red-glow); } .war-side.blue { color:var(--info); }
+.war-side b { font-size:20px; font-family:var(--mono); }
+.war-vs { font-size:10px; color:var(--text-dim); letter-spacing:.08em; }
+.war-phase { text-align:center; font-size:12px; margin:7px 0; min-height:16px; color:var(--text); }
+.war-phase.attacking { color:var(--red-glow); animation:warshake .4s; }
+.war-phase.blocked { color:var(--green); }
+.war-phase.breached { color:var(--red-glow); animation:warflash .5s; }
+@keyframes warshake { 0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px);} 75%{transform:translateX(3px);} }
+@keyframes warflash { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+.war-fronts { display:flex; flex-wrap:wrap; gap:6px; justify-content:center; margin:6px 0; }
+.war-front { font-size:9px; font-family:var(--mono); padding:4px 8px; border-radius:5px;
+  background:var(--panel-hi); border:1px solid var(--grid); color:var(--text-dim);
+  display:flex; flex-direction:column; align-items:center; gap:2px; min-width:64px; }
+.war-front small { font-size:9px; }
+.war-front.block { border-color:var(--green-soft); color:var(--green); }
+.war-front.breach { border-color:#6a1a1a; color:var(--red-glow); }
+.war-front.active { transform:scale(1.08); }
+.war-front.active.attacking { border-color:var(--red); box-shadow:0 0 10px -2px var(--red); animation:warpulse .6s infinite; }
+.war-front.active.blocked { border-color:var(--green); box-shadow:0 0 10px -2px var(--green-dim); }
+.war-log { margin-top:6px; border-top:1px dashed var(--grid); padding-top:4px; }
+.war-log-row { font-size:9px; font-family:var(--mono); color:var(--text-dim); padding:1px 0; }
+.war-log-row b { color:var(--text); }

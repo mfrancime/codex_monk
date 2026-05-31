@@ -284,12 +284,17 @@ _WARGAME = {'proc': None, 'started_at': None}
 
 
 def _wargame_busy() -> bool:
+    # A round this server spawned is the authoritative signal.
     p = _WARGAME['proc']
     if p is not None and p.poll() is None:
         return True
+    # Also detect a round started elsewhere (e.g. wargame_autorun.sh), but match
+    # ONLY a real python interpreter running wargame.py — NOT shells that merely
+    # mention the string (a stale wait-loop did exactly that and wedged this guard).
     try:
-        r = subprocess.run(['pgrep', '-f', 'wargame.py --rounds'],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        r = subprocess.run(
+            ['pgrep', '-f', r'python[^ ]* [^ ]*wargame\.py --rounds'],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         return r.returncode == 0
     except Exception:
         return False
@@ -317,6 +322,44 @@ def _wargame_run(rounds: int = 1, gens: int = 250, lam: int = 24) -> dict:
 
 def _wargame_status() -> dict:
     return {'running': _wargame_busy(), 'started_at': _WARGAME['started_at']}
+
+
+# ── START WAR: autonomous Red-vs-Blue battle (war_driver.py) ────────────────
+
+_WAR_LOCK = threading.Lock()
+_WAR = {'proc': None}
+
+
+def _war_running() -> bool:
+    p = _WAR['proc']
+    return p is not None and p.poll() is None
+
+
+def _war_start(duration: int = 600, gap: float = 7.0) -> dict:
+    with _WAR_LOCK:
+        if _war_running():
+            return {'ok': False, 'running': True, 'error': 'a war is already raging'}
+        fh = open(os.path.join(ROOT, 'graph', 'war.log'), 'ab')
+        env = os.environ.copy()
+        env.setdefault('PYTHONUNBUFFERED', '1')
+        proc = subprocess.Popen(
+            [sys.executable, '-u', os.path.join(ROOT, 'war_driver.py'),
+             str(duration), str(gap)],
+            cwd=ROOT, stdout=fh, stderr=subprocess.STDOUT, env=env)
+        _WAR['proc'] = proc
+        return {'ok': True, 'running': True, 'pid': proc.pid, 'duration_s': duration}
+
+
+def _war_stop() -> dict:
+    with _WAR_LOCK:
+        p = _WAR['proc']
+        if p is None or p.poll() is not None:
+            return {'ok': True, 'running': False, 'note': 'no war running'}
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        return {'ok': True, 'running': False, 'note': 'ceasefire'}
 
 
 # ── fabric reading ─────────────────────────────────────────────────────────
@@ -726,6 +769,14 @@ class VizHandler(BaseHTTPRequestHandler):
                 int(body.get('lam', 24))))
         if path == '/api/wargame' and method == 'GET':
             return self._json(_wargame_status())
+        if path == '/api/war' and method == 'POST':
+            action = (body.get('action') or 'start').lower()
+            if action == 'stop':
+                return self._json(_war_stop())
+            return self._json(_war_start(int(body.get('duration', 600)),
+                                         float(body.get('gap', 7.0))))
+        if path == '/api/war' and method == 'GET':
+            return self._json({'running': _war_running()})
 
         return self._json({'error': 'not found', 'path': path}, status=404)
 

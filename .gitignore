@@ -34,3 +34,6 @@ __pycache__/
 
 # deployed-champion exhibit transient telemetry
 /tmp/codex_k8s_telemetry/
+
+# transient START WAR battle state
+/web/war.json

@@ -548,6 +548,73 @@ function evoVecRow(fr) {
   </div>`;
 }
 
+// 🏆 LEADERBOARD — rank the Blue defenders by a battle score (win-rate, Red
+// escalations survived, speed-to-master). Directly shows the teaming + standings.
+function evoLeaderboard(fronts, names) {
+  const rows = names.map((n) => {
+    const f = fronts[n], s = f.stats || {};
+    const holding = f.champion_feasible && (f.champion_score ?? -1) >= -0.001;
+    const battle = Math.round((s.win_rate || 0) * 100)
+      + (s.breaks_survived || 0) * 8
+      - (s.first_master_round || 99)
+      + (holding ? 25 : 0);
+    return { n, f, s, battle, holding };
+  }).sort((a, b) => b.battle - a.battle);
+  const medal = ['🥇', '🥈', '🥉'];
+  const body = rows.map((r, i) => `
+    <div class="lb-row ${r.holding ? 'hold' : 'breach'}">
+      <span class="lb-rank">${medal[i] || '#' + (i + 1)}</span>
+      <span class="lb-name">${(r.f.flavor || r.n).replace(/\s*—.*/, '')}</span>
+      <code class="lb-gene">${evoGenomeHTML(r.f.champion)}</code>
+      <span class="lb-stat" title="rounds won (score 0)">${Math.round((r.s.win_rate || 0) * 100)}%</span>
+      <span class="lb-stat" title="Red escalations survived → re-mastered">⚔️${r.s.breaks_survived || 0}</span>
+      <span class="lb-stat" title="DNA edit-distance churn — how much it evolved">🧬${r.s.dna_churn || 0}</span>
+      <span class="lb-badge ${r.holding ? 'ok' : 'bad'}">${r.holding ? 'HOLDING' : 'BREACHED'}</span>
+    </div>`).join('');
+  const blue = rows.filter((r) => r.holding).length;
+  return `<div class="evo-lb">
+    <div class="evo-lb-head">🏆 LEADERBOARD · 🔵 Blue holds ${blue}/${rows.length} fronts</div>
+    ${body}</div>`;
+}
+
+// ⚙️ LIVE FORCES — surface the architectural roles from the running fabrics so
+// gateway / governor / mutator / probe / sink are identifiable (answers "where
+// is the gateway/governor"), and label which fabric is which team.
+function evoForces() {
+  const sw = (STATE.swarms || []).filter((s) => s.online);
+  if (!sw.length) return '<div class="evo-forces"><div class="evo-forces-head">⚙️ LIVE FORCES — no fabrics online</div></div>';
+  const roles = { gateway: 0, governor: 0, mutator: 0, probe: 0, sink: 0 };
+  const fabrics = [];
+  sw.forEach((s) => {
+    const short = s.swarm_name || s.path.split('/').pop()
+      .replace(/^codex\./, '').replace(/\.fabric$/, '');
+    let purpose = 'live fabric';
+    if (/k8s_deployed/.test(s.path)) purpose = '🔵 BLUE — champions as live DNA';
+    else if (/evolver/.test(s.path)) purpose = '🧬 live evolver — mutates DNA';
+    else if (/kernel/.test(s.path)) purpose = '📡 sensor swarm';
+    else if (/aggregat/.test(s.path)) purpose = '🛡️ governor — cluster oversight';
+    (s.agents || []).forEach((a) => {
+      if (a.probe === 'quorum') roles.governor++;
+      else if (roles[a.role] !== undefined) roles[a.role]++;
+    });
+    fabrics.push(`<span class="force-fab"><b>${short}</b> · ${purpose}</span>`);
+  });
+  const chip = (icon, label, n) => n
+    ? `<span class="force-chip" title="${label}">${icon} ${label} ×${n}</span>`
+    : `<span class="force-chip off" title="${label} — not running">${icon} ${label} ×0</span>`;
+  return `<div class="evo-forces">
+    <div class="evo-forces-head">⚙️ LIVE FORCES (running fabrics)</div>
+    <div class="force-roles">
+      ${chip('🚪', 'gateway', roles.gateway)}
+      ${chip('🛡️', 'governor', roles.governor)}
+      ${chip('🧬', 'mutator', roles.mutator)}
+      ${chip('📡', 'probe', roles.probe)}
+      ${chip('🗄️', 'sink', roles.sink)}
+    </div>
+    <div class="force-fabrics">${fabrics.join('')}</div>
+  </div>`;
+}
+
 function evoRenderFront(name, fr) {
   const total = fr.rungs_total;
   const mastered = (fr.mastered_rung ?? -1) + 1;
@@ -633,10 +700,14 @@ async function evoRefresh() {
     `<span class="evo-hold">🔵 Blue holding <b>${holding}/${fnames.length}</b> fronts</span> · ` +
     `${doc.rounds_total || 0} rounds · ${fnames.length} fronts · ` +
     `updated ${new Date((doc.updated || 0) * 1000).toLocaleTimeString()}`;
-  const order = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
+  const order = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler',
+                 'etcd_native', 'nodes_native'];
   const names = Object.keys(fronts).sort(
     (a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
-  $('evo-body').innerHTML = names.map((n) => evoRenderFront(n, fronts[n])).join('')
+  $('evo-body').innerHTML =
+    evoLeaderboard(fronts, names) +
+    evoForces() +
+    names.map((n) => evoRenderFront(n, fronts[n])).join('')
     || '<div class="evo-empty">no fronts</div>';
 }
 
@@ -645,9 +716,12 @@ function evoToggle(force) {
   $('evopanel').setAttribute('aria-hidden', String(!EVO.open));
   if (EVO.open) {
     evoRefresh();
+    evoWarPoll();
     if (!EVO.timer) EVO.timer = setInterval(evoRefresh, 4000);
-  } else if (EVO.timer) {
-    clearInterval(EVO.timer); EVO.timer = null;
+    if (!WAR.timer) WAR.timer = setInterval(evoWarPoll, 1500);
+  } else {
+    if (EVO.timer) { clearInterval(EVO.timer); EVO.timer = null; }
+    if (WAR.timer) { clearInterval(WAR.timer); WAR.timer = null; }
   }
 }
 
@@ -673,9 +747,65 @@ async function evoRunRound() {
   }, 2000);
 }
 
+// ⚔ START WAR — autonomous Red-vs-Blue battle against the live champions.
+const WAR = { timer: null };
+
+function evoWarBanner(w) {
+  if (!w) return '';
+  const s = w.score || { blue: 0, red: 0};
+  const cur = w.current || {};
+  const phase = cur.phase || 'calm';
+  const phaseText = ({
+    attacking: `🔴 RED striking <b>${cur.front}</b> — ${cur.attack}`,
+    blocked: `🔵 BLUE BLOCKED <b>${cur.front}</b> · ${cur.verdict || ''}`,
+    breached: `🔴 RED BREACHED <b>${cur.front}</b> · Blue said ${cur.verdict || ''}`,
+    calm: w.running ? 'standing down…' : `⚑ war over — winner: <b>${w.winner || '—'}</b>`,
+  })[phase] || '';
+  const fronts = w.fronts || {};
+  const tiles = Object.keys(fronts).map((f) => {
+    const ff = fronts[f];
+    const act = (cur.front === f && w.running) ? 'active ' + phase : '';
+    const res = ff.last === 'BREACH' ? 'breach' : ff.last === 'BLOCKED' ? 'block' : '';
+    return `<span class="war-front ${act} ${res}">${f}<small>🔵${ff.blocks} 🔴${ff.breaches}</small></span>`;
+  }).join('');
+  const log = (w.log || []).slice(-6).reverse().map((l) =>
+    `<div class="war-log-row">t${l.turn} · <b>${l.front}</b> ${l.attack} → ${l.result}</div>`).join('');
+  return `<div class="evo-war-box ${w.running ? 'live' : 'over'}">
+    <div class="war-score">
+      <span class="war-side red">🔴 RED <b>${s.red}</b></span>
+      <span class="war-vs">${w.running ? '⚔ LIVE · turn ' + (w.turn || 0) : 'CEASEFIRE'}</span>
+      <span class="war-side blue">🔵 BLUE <b>${s.blue}</b></span>
+    </div>
+    <div class="war-phase ${phase}">${phaseText}</div>
+    <div class="war-fronts">${tiles}</div>
+    <div class="war-log">${log}</div>
+  </div>`;
+}
+
+async function evoWarPoll() {
+  let w = null;
+  try { w = await jget('/war.json?_=' + Date.now()); } catch (e) { /* no war yet */ }
+  const el = $('evo-war-banner');
+  if (el) el.innerHTML = w ? evoWarBanner(w) : '';
+  const btn = $('evo-war');
+  if (btn && w) {
+    btn.textContent = w.running ? '■ STOP WAR' : '⚔ START WAR';
+    btn.classList.toggle('live', !!w.running);
+  }
+}
+
+async function evoWarToggle() {
+  let w = null;
+  try { w = await jget('/war.json?_=' + Date.now()); } catch (e) { /* none */ }
+  if (w && w.running) await jpost('/api/war', { action: 'stop' });
+  else await jpost('/api/war', { action: 'start', duration: 600, gap: 7 });
+  setTimeout(evoWarPoll, 500);
+}
+
 $('evo-toggle').addEventListener('click', () => evoToggle());
 $('evo-close').addEventListener('click', () => evoToggle(false));
 $('evo-run').addEventListener('click', evoRunRound);
+$('evo-war').addEventListener('click', evoWarToggle);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EVO.open) evoToggle(false); });
 
 // ── SCORE — gamified uptime: climbs while all-green, streak resets on crit ─
