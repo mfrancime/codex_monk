@@ -757,10 +757,13 @@ function evoWarBanner(w) {
   const phase = cur.phase || 'calm';
   const phaseText = ({
     attacking: `🔴 RED striking <b>${cur.front}</b> — ${cur.attack}`,
-    blocked: `🔵 BLUE BLOCKED <b>${cur.front}</b> · ${cur.verdict || ''}`,
-    breached: `🔴 RED BREACHED <b>${cur.front}</b> · Blue said ${cur.verdict || ''}`,
+    blocked: `🔵 BLUE BLOCKED <b>${cur.front}</b> · ${cur.verdict || ''}${cur.latency != null ? ' in ' + cur.latency + 's' : ''}`,
+    breached: `🔴 RED BREACHED <b>${cur.front}</b> — Blue too slow`,
     calm: w.running ? 'standing down…' : `⚑ war over — winner: <b>${w.winner || '—'}</b>`,
   })[phase] || '';
+  const strat = w.strategy
+    ? `<div class="war-strat">〔WAVE ${w.wave || 1}〕 ⏱ Blue reaction window <b>${w.react_window || '?'}s</b> · 🔴 ${w.strategy}</div>`
+    : '';
   const fronts = w.fronts || {};
   const tiles = Object.keys(fronts).map((f) => {
     const ff = fronts[f];
@@ -777,6 +780,7 @@ function evoWarBanner(w) {
       <span class="war-side blue">🔵 BLUE <b>${s.blue}</b></span>
     </div>
     <div class="war-phase ${phase}">${phaseText}</div>
+    ${strat}
     <div class="war-fronts">${tiles}</div>
     <div class="war-log">${log}</div>
   </div>`;

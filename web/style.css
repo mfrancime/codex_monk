@@ -699,3 +699,7 @@ body[data-defcon="1"] .klaxon {
 .war-log { margin-top:6px; border-top:1px dashed var(--grid); padding-top:4px; }
 .war-log-row { font-size:9px; font-family:var(--mono); color:var(--text-dim); padding:1px 0; }
 .war-log-row b { color:var(--text); }
+
+/* Red strategy / wave intensity line */
+.war-strat { text-align:center; font-size:10px; color:var(--amber); margin:4px 0 2px; opacity:.9; }
+.war-strat b { color:var(--orange); }

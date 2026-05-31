@@ -19,6 +19,7 @@ for the war-room battle view. Eval/orchestration tier; no swarm/ changes.
 
 import json
 import os
+import random
 import struct
 import subprocess
 import sys
@@ -85,9 +86,40 @@ def _write(state):
     os.replace(tmp, WAR_JSON)
 
 
+# Red escalates in WAVES — each shrinks Blue's reaction window. Blue agents tick
+# ~every 5s, so once the window drops below that, late attacks slip through and
+# the score becomes genuinely contested instead of a walkover.
+# Windows fall BELOW Blue's ~5s calm tick cadence in the later waves, so a
+# fast/stealthy strike outruns Blue's polling and breaches — Red's path to win.
+WAVE_WINDOWS = [9, 6, 4, 3, 2, 2]
+WAVE_TURNS = 3
+
+
+def _pick_target(fronts, rng):
+    """Red strategy: 65% press the WEAKEST front (most net breaches), else feint
+    at a random one. Adaptive pressure with misdirection."""
+    if rng.random() < 0.65:
+        return max(PLAYBOOK, key=lambda p:
+                   fronts[p[0]]['breaches'] - fronts[p[0]]['blocks'] * 0.25)
+    return rng.choice(PLAYBOOK)
+
+
+def _award(latency, window):
+    """Latency-banded scoring: fast blocks worth more; a breach hands Red points
+    scaled by how hard the squeeze was."""
+    if latency is None:
+        return ('red', 2 if window <= 5 else 1)
+    if latency <= 2:
+        return ('blue', 3)
+    if latency <= window * 0.6:
+        return ('blue', 2)
+    return ('blue', 1)
+
+
 def main():
     duration = int(sys.argv[1]) if len(sys.argv) > 1 else 600
-    gap = float(sys.argv[2]) if len(sys.argv) > 2 else 7.0
+    seed = int(sys.argv[3]) if len(sys.argv) > 3 else int(time.time())
+    rng = random.Random(seed)
     deadline = time.time() + duration
 
     fronts = {f: {'blocks': 0, 'breaches': 0, 'last': '—'} for f, _, _, _ in PLAYBOOK}
@@ -95,61 +127,68 @@ def main():
     log = []
     turn = 0
 
+    def snap(cur, phase, **extra):
+        d = {'running': True, 'turn': turn, 'score': score, 'fronts': fronts,
+             'current': cur, 'phase': phase,
+             'log': log[-24:], 'duration_s': duration, 'ends_at': deadline}
+        d.update(extra)
+        _write(d)
+
     _inject('healthy')
-    _write({'running': True, 'turn': 0, 'score': score, 'fronts': fronts,
-            'current': {'front': '—', 'attack': 'mustering forces…', 'phase': 'calm'},
-            'log': [], 'duration_s': duration, 'ends_at': deadline})
+    snap({'front': '—', 'attack': 'mustering forces…', 'phase': 'calm'}, 'calm',
+         wave=1, react_window=WAVE_WINDOWS[0], strategy='Red is massing for the assault')
     time.sleep(2)
 
-    i = 0
     while time.time() < deadline:
         turn += 1
-        front, aid, label, want_code = PLAYBOOK[i % len(PLAYBOOK)]
-        i += 1
+        wave = turn // WAVE_TURNS
+        window = WAVE_WINDOWS[min(wave, len(WAVE_WINDOWS) - 1)]
+        front, aid, label, want_code = _pick_target(fronts, rng)
+        weakest = max(fronts, key=lambda f: fronts[f]['breaches'])
+        strat = (f'wave {wave + 1}: squeeze Blue to {window}s · pressing {front}'
+                 + (f' (weak spot: {weakest})' if fronts[weakest]['breaches'] else ''))
 
-        # 🔴 Red attacks
-        _write({'running': True, 'turn': turn, 'score': score, 'fronts': fronts,
-                'current': {'front': front, 'attack': label, 'phase': 'attacking'},
-                'log': log[-24:], 'duration_s': duration, 'ends_at': deadline})
+        # 🔴 Red strikes
+        snap({'front': front, 'attack': label, 'phase': 'attacking'}, 'attacking',
+             wave=wave + 1, react_window=window, strategy=strat)
         _inject(front)
 
-        # 🔵 Blue gets up to `gap` seconds to react — POLL its verdict each tick
-        # so a correct block is credited the moment it fires (no fixed-wait
-        # breach artifacts from reading before the agent ticked).
+        # 🔵 Blue gets `window` seconds — poll, recording latency-to-block
+        t0 = time.time()
         sev = code = None
-        blocked = False
-        t_end = time.time() + max(gap, 8.0)
-        while time.time() < t_end:
-            time.sleep(1.0)
+        latency = None
+        while time.time() - t0 < window:
+            time.sleep(0.8)
             sev, code = _verdict(aid)
             if sev not in (None, 'OK') and code == want_code:
-                blocked = True
+                latency = round(time.time() - t0, 1)
                 break
-        if blocked:
-            score['blue'] += 1
+
+        team, pts = _award(latency, window)
+        if team == 'blue':
+            score['blue'] += pts
             fronts[front]['blocks'] += 1
             fronts[front]['last'] = 'BLOCKED'
-            result, phase = f'🔵 BLOCKED ({sev}:{code})', 'blocked'
+            result, phase = f'🔵 BLOCK +{pts} ({sev}:{code} in {latency}s)', 'blocked'
         else:
-            score['red'] += 1
+            score['red'] += pts
             fronts[front]['breaches'] += 1
             fronts[front]['last'] = 'BREACH'
-            result, phase = f'🔴 BREACH (Blue said {sev}:{code})', 'breached'
+            result, phase = f'🔴 BREACH +{pts} (Blue too slow at {window}s)', 'breached'
 
         log.append({'turn': turn, 'front': front, 'attack': label, 'result': result})
-        _write({'running': True, 'turn': turn, 'score': score, 'fronts': fronts,
-                'current': {'front': front, 'attack': label, 'phase': phase,
-                            'verdict': f'{sev}:{code}'},
-                'log': log[-24:], 'duration_s': duration, 'ends_at': deadline})
+        snap({'front': front, 'attack': label, 'phase': phase,
+              'verdict': f'{sev}:{code}', 'latency': latency}, phase,
+             wave=wave + 1, react_window=window, strategy=strat)
 
-        # 🔵 Blue stands the cluster back down
         _inject('healthy')
-        time.sleep(max(2.0, gap * 0.6))
+        time.sleep(max(1.5, window * 0.4))
 
     _inject('healthy')
     _write({'running': False, 'turn': turn, 'score': score, 'fronts': fronts,
             'current': {'front': '—', 'attack': 'war over', 'phase': 'calm'},
-            'log': log[-24:], 'duration_s': duration, 'ends_at': time.time(),
+            'wave': turn // WAVE_TURNS + 1, 'log': log[-24:], 'duration_s': duration,
+            'ends_at': time.time(),
             'winner': 'BLUE' if score['blue'] >= score['red'] else 'RED'})
 
 
