@@ -753,61 +753,135 @@ async function evoRunRound() {
   }, 2000);
 }
 
-// ⚔ START WAR — autonomous Red-vs-Blue battle against the live champions.
-const WAR = { timer: null };
+// ⚔ START WAR — autonomous Red-vs-Blue STRATEGY battle. Click START → the two
+// armies fight on the Kubernetes battlefield with NO further input; your only
+// lever is to drill into a front and deploy a custom genome to that Blue unit.
+const WAR = { timer: null, last: null, selected: null };
+const BF_ORDER = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
 
 function evoWarBanner(w) {
   if (!w) return '';
-  const s = w.score || { blue: 0, red: 0};
+  const s = w.score || { blue: 0, red: 0 };
   const cur = w.current || {};
   const phase = cur.phase || 'calm';
+  const gov = w.governor || {};
+  const bf = w.battlefield || {};
+  const armies = w.armies || {};
   const phaseText = ({
-    attacking: `🔴 RED striking <b>${cur.front}</b> — ${cur.attack}`,
-    blocked: `🔵 BLUE BLOCKED <b>${cur.front}</b> · ${cur.verdict || ''}${cur.latency != null ? ' in ' + cur.latency + 's' : ''}`,
-    breached: `🔴 RED BREACHED <b>${cur.front}</b> — Blue too slow`,
-    calm: w.running ? 'standing down…' : `⚑ war over — winner: <b>${w.winner || '—'}</b>`,
+    attacking: `🔴 RED storms <b>${cur.front}</b> — ${cur.attack}`,
+    blocked: `🔵 BLUE HELD <b>${cur.front}</b> · ${cur.verdict || ''}${cur.latency != null ? ' in ' + cur.latency + 's' : ''}`,
+    breached: `🔴 RED BREACHED <b>${cur.front}</b> — ground lost`,
+    calm: w.running ? 'standing down…' : `⚑ WAR OVER — winner: <b>${w.winner || '—'}</b>`,
   })[phase] || '';
-  const strat = w.strategy
-    ? `<div class="war-strat">〔WAVE ${w.wave || 1}〕 ⏱ Blue reaction window <b>${w.react_window || '?'}s</b> · 🔴 ${w.strategy}</div>`
-    : '';
-  const fronts = w.fronts || {};
-  const tiles = Object.keys(fronts).map((f) => {
-    const ff = fronts[f];
-    const act = (cur.front === f && w.running) ? 'active ' + phase : '';
-    const res = ff.last === 'BREACH' ? 'breach' : ff.last === 'BLOCKED' ? 'block' : '';
-    const fort = ff.defense ? 'fortified' : '';
-    const shield = ff.defense ? `<span class="war-shield" title="Blue reinforcement (+${ff.defense}s reaction)">🛡️${ff.defense}</span>` : '';
-    return `<span class="war-front ${act} ${res} ${fort}">${f}<small>🔵${ff.blocks} 🔴${ff.breaches}</small>${shield}</span>`;
-  }).join('');
+  const govTxt = gov.present
+    ? `🛡️ governor: <b class="${gov.sev && gov.sev !== 'OK' ? 'gov-alert' : ''}">${gov.sev}${gov.code && gov.code !== 'OK' ? ':' + gov.code : ''}</b> overseeing`
+    : '🛡️ governor offline (./deploy_governor.sh)';
   const summary = (!w.running && w.summary) ? `<div class="war-summary">${w.summary}</div>` : '';
-  const log = (w.log || []).slice(-6).reverse().map((l) =>
-    `<div class="war-log-row">t${l.turn} · <b>${l.front}</b> ${l.attack} → ${l.result}</div>`).join('');
+  const log = (w.log || []).slice(-5).reverse().map((l) =>
+    `<div class="war-log-row">t${l.turn} · ${l.result}</div>`).join('');
+  const blueHeld = armies.blue ? armies.blue.held : 0;
+  const redTook = armies.red ? armies.red.taken : 0;
   return `<div class="evo-war-box ${w.running ? 'live' : 'over'}">
     <div class="war-score">
       <span class="war-side red">🔴 RED <b>${s.red}</b></span>
-      <span class="war-vs">${w.running ? '⚔ LIVE · turn ' + (w.turn || 0) : 'CEASEFIRE'}</span>
+      <span class="war-vs">${w.running ? '⚔ LIVE · turn ' + (w.turn || 0) + ' · wave ' + (w.wave || 1) : 'CEASEFIRE'}</span>
       <span class="war-side blue">🔵 BLUE <b>${s.blue}</b></span>
     </div>
+    <div class="war-gov">${govTxt}</div>
     <div class="war-phase ${phase}">${phaseText}</div>
-    ${strat}
-    <div class="war-fronts">${tiles}</div>
+    <div class="war-armies">🔵 holds <b>${blueHeld}</b>/${Object.keys(bf).length} fronts · 🔴 has taken <b>${redTook}</b></div>
+    ${w.strategy ? `<div class="war-strat">🔴 ${w.strategy}</div>` : ''}
     ${summary}
     <div class="war-log">${log}</div>
   </div>`;
 }
 
+// Reconcile the battlefield cells IN PLACE (keyed by front) so they never detach
+// mid-click and don't flicker — the grid lives in its own persistent container.
+const _bfCells = new Map();
+function evoWarCells(w) {
+  const grid = $('evo-war-bf');
+  if (!grid) return;
+  const bf = (w && w.battlefield) || {};
+  const fronts = Object.keys(bf).sort((a, b) => BF_ORDER.indexOf(a) - BF_ORDER.indexOf(b));
+  if (!fronts.length) { grid.innerHTML = ''; _bfCells.clear(); return; }
+  fronts.forEach((f) => {
+    const c = bf[f];
+    let cell = _bfCells.get(f);
+    if (!cell) {
+      cell = document.createElement('div');
+      cell.dataset.front = f;
+      cell.title = 'click to inspect / deploy a genome';
+      cell.innerHTML = '<div class="bf-name"></div><div class="bf-bar"><span></span></div><div class="bf-meta"></div>';
+      _bfCells.set(f, cell);
+      grid.appendChild(cell);
+    }
+    const atk = c.under_attack && w.running ? ' under-attack' : '';
+    cell.className = 'bf-cell ' + c.holder + atk + (WAR.selected === f ? ' selected' : '');
+    cell.children[0].textContent = f + (c.defense ? ' 🛡️' + c.defense : '');
+    const bar = cell.children[1].firstChild;
+    bar.style.width = c.health + '%';
+    bar.className = c.holder;
+    cell.children[2].textContent = c.holder + ' · ' + c.health + 'hp';
+  });
+}
+
+// 🔍 drill-down — click a front to inspect it and DEPLOY A CUSTOM GENOME to its
+// live Blue unit (the user's only intervention). Rendered in a separate element
+// so polling never wipes the genome you're typing.
+function evoWarSelect(front) {
+  WAR.selected = front;
+  const el = $('evo-war-detail');
+  const w = WAR.last;
+  if (!el) return;
+  if (!w || !w.battlefield || !w.battlefield[front]) { el.innerHTML = ''; return; }
+  const c = w.battlefield[front];
+  const bu = ((w.armies && w.armies.blue && w.armies.blue.units) || []).find((u) => u.front === front) || {};
+  const cur = w.current || {};
+  const atk = (cur.front === front && w.running) ? cur.attack : 'probing for an opening';
+  el.innerHTML = `<div class="bf-detail">
+    <div class="bf-detail-head"><span>🔍 ${front} — <b class="${c.holder}">${(c.holder || '').toUpperCase()}</b> · ${c.health}hp</span>
+      <button class="bf-close" type="button">×</button></div>
+    <div class="bf-row"><span class="bf-lbl blue">🔵 DEFENDER</span> <code class="bf-gene">${evoGenomeHTML(bu.genome || '')}</code></div>
+    <div class="bf-row"><span class="bf-lbl">status</span> ${c.verdict} · holds ${c.blocks} · breaches ${c.breaches} · 🛡️ reinforcement +${c.defense || 0}s</div>
+    <div class="bf-row"><span class="bf-lbl red">🔴 ATTACKER</span> ${atk}</div>
+    <div class="bf-inject">
+      <input class="bf-genome-in" id="bf-gin" placeholder="custom genome for ${front}…" spellcheck="false">
+      <button class="bf-deploy" type="button" data-aid="${bu.aid}">⚡ DEPLOY</button>
+    </div>
+    <div class="bf-hint">your intervention: re-arm this live Blue unit's DNA — it fights with your genome on its next tick</div>
+    <div class="bf-result" id="bf-res"></div>
+  </div>`;
+}
+
+async function evoWarDeploy(aid) {
+  const w = WAR.last;
+  const inp = $('bf-gin');
+  const res = $('bf-res');
+  const g = ((inp && inp.value) || '').trim();
+  if (!g) { if (res) res.textContent = 'enter a genome string first'; return; }
+  try {
+    const r = await jpost('/api/propose', { path: w.blue_fabric, id: aid, genome: g });
+    if (res) {
+      res.innerHTML = r.ok
+        ? `✅ deployed — <b>${WAR.selected}</b> now defends with «${g}»`
+        : 'ERR: ' + (r.error || 'unknown');
+      res.className = 'bf-result ' + (r.ok ? 'ok' : 'err');
+    }
+  } catch (e) { if (res) res.textContent = 'deploy failed: ' + e; }
+}
+
 async function evoWarPoll() {
   let w = null;
   try { w = await jget('/war.json?_=' + Date.now()); } catch (e) { /* no war yet */ }
-  // A 'running' flag is STALE if the driver hasn't written in >25s (it died /
-  // was killed before writing its final state). Treat it as stopped so the
-  // STOP button can never get stuck blinking.
   if (w && w.running && w.updated && (Date.now() / 1000 - w.updated) > 25) {
     w.running = false;
     if (w.current) w.current.phase = 'calm';
   }
+  WAR.last = w;
   const el = $('evo-war-banner');
   if (el) el.innerHTML = w ? evoWarBanner(w) : '';
+  evoWarCells(w);
   const btn = $('evo-war');
   if (btn && w) {
     btn.textContent = w.running ? '■ STOP WAR' : '⚔ START WAR';
@@ -816,8 +890,6 @@ async function evoWarPoll() {
 }
 
 async function evoWarToggle() {
-  // Decide from the button's own state (set by the poll) — no slow pre-fetch, so
-  // STOP responds instantly. Optimistically flip the label too.
   const btn = $('evo-war');
   const live = btn.classList.contains('live');
   btn.textContent = live ? '…stopping' : '…starting';
@@ -830,6 +902,16 @@ $('evo-toggle').addEventListener('click', () => evoToggle());
 $('evo-close').addEventListener('click', () => evoToggle(false));
 $('evo-run').addEventListener('click', evoRunRound);
 $('evo-war').addEventListener('click', evoWarToggle);
+// battlefield cell → drill-down (delegated on the persistent reconciled grid)
+$('evo-war-bf').addEventListener('click', (e) => {
+  const cell = e.target.closest('.bf-cell');
+  if (cell) evoWarSelect(cell.dataset.front);
+});
+$('evo-war-detail').addEventListener('click', (e) => {
+  if (e.target.closest('.bf-close')) { WAR.selected = null; $('evo-war-detail').innerHTML = ''; return; }
+  const dep = e.target.closest('.bf-deploy');
+  if (dep) evoWarDeploy(parseInt(dep.dataset.aid, 10));
+});
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && EVO.open) evoToggle(false); });
 
 // ── SCORE — gamified uptime: climbs while all-green, streak resets on crit ─
