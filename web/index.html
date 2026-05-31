@@ -111,6 +111,7 @@
     <span class="wc-live" id="wc-live">○ STANDBY</span>
   </div>
   <div class="wc-score" id="wc-score"></div>
+  <div class="wc-series" id="wc-series"></div>
   <div class="wc-teams" id="wc-teams"></div>
   <div class="wc-feed-head">▶ AUTONOMOUS EVENT FEED <span class="wc-cursor">█</span></div>
   <div class="wc-feed" id="wc-feed"><div class="wc-idle">no active operation — open ⧬ WARGAME and click ⚔ START WAR</div></div>
@@ -174,6 +175,11 @@
       <option value="veteran" selected>🟠 VETERAN</option>
       <option value="elite">🔴 ELITE</option>
     </select>
+    <select class="evo-diff" id="evo-bestof" title="Series length — first to win the majority takes the series">
+      <option value="3">BEST OF 3</option>
+      <option value="5" selected>BEST OF 5</option>
+      <option value="7">BEST OF 7</option>
+    </select>
     <button class="evo-war" id="evo-war" type="button" title="Launch an autonomous Red-vs-Blue battle against the live champions">⚔ START WAR</button>
     <button class="evo-run" id="evo-run" type="button" title="Run one co-evolution round now (advance the arms race)">▶ RUN ROUND</button>
     <button class="evo-close" id="evo-close" type="button">×</button>
@@ -190,6 +196,7 @@
     <div class="wv-banner" id="wv-banner">⚑ WAR OVER</div>
     <div class="wv-score" id="wv-score"></div>
     <div class="wv-stats" id="wv-stats"></div>
+    <div class="wv-series" id="wv-series"></div>
     <div class="wv-summary" id="wv-summary"></div>
     <div class="wv-actions">
       <button class="wv-rematch" id="wv-rematch" type="button">⚔ REMATCH</button>

@@ -760,6 +760,47 @@ async function evoRunRound() {
 const WAR = { timer: null, last: null, selected: null };
 const BF_ORDER = ['pods', 'nodes', 'apiserver', 'etcd', 'scheduler'];
 
+// ── 🏆 SERIES RECORD — persistent best-of-N standings across matches ─────────
+// Lives in localStorage so the rivalry survives reloads. A match result is
+// recorded exactly once (off the same running→ended hook as the victory screen);
+// when a team reaches the series majority it clinches and a fresh series begins.
+const WAR_REC_KEY = 'codex_war_record_v1';
+function loadRecord() {
+  let r = null;
+  try { r = JSON.parse(localStorage.getItem(WAR_REC_KEY) || 'null'); } catch (e) { /* ignore */ }
+  if (!r || typeof r !== 'object') r = {};
+  return Object.assign(
+    { blue: 0, red: 0, sBlue: 0, sRed: 0, bestOf: 5, streakTeam: null, streak: 0 }, r);
+}
+function saveRecord(r) {
+  try { localStorage.setItem(WAR_REC_KEY, JSON.stringify(r)); } catch (e) { /* ignore */ }
+}
+function seriesNeed(r) { return Math.ceil((r.bestOf || 5) / 2); }
+WAR.record = loadRecord();
+
+function recordResult(winner) {
+  const r = WAR.record;
+  const team = (winner || '').toUpperCase() === 'RED' ? 'RED' : 'BLUE';
+  if (team === 'RED') { r.red++; r.sRed++; } else { r.blue++; r.sBlue++; }
+  if (r.streakTeam === team) r.streak++; else { r.streakTeam = team; r.streak = 1; }
+  const need = seriesNeed(r);
+  const clinch = r.sRed >= need ? 'RED' : (r.sBlue >= need ? 'BLUE' : null);
+  saveRecord(r);
+  return clinch;        // non-null → series won; caller resets for a new series
+}
+function renderSeries() {
+  const el = $('wc-series');
+  if (!el) return;
+  const r = WAR.record;
+  const need = seriesNeed(r);
+  const streak = r.streak > 1
+    ? ` · <span class="${r.streakTeam === 'RED' ? 'red' : 'blue'}">${r.streakTeam} streak ×${r.streak}</span>` : '';
+  el.innerHTML =
+    `<span class="wc-series-lbl">SERIES · best of ${r.bestOf} (first to ${need})</span>` +
+    `<span class="wc-series-sc">🔴 <b>${r.sRed}</b> — <b>${r.sBlue}</b> 🔵</span>` +
+    `<span class="wc-series-life">lifetime 🔴 ${r.red} · 🔵 ${r.blue}${streak}</span>`;
+}
+
 function evoWarBanner(w) {
   if (!w) return '';
   const s = w.score || { blue: 0, red: 0 };
@@ -922,6 +963,7 @@ function renderWarConsole(w) {
   const liveEl = $('wc-live'), scoreEl = $('wc-score');
   const teamsEl = $('wc-teams'), feedEl = $('wc-feed');
   if (!feedEl) return;
+  renderSeries();                       // standings stay visible even pre-war
   if (!w) {
     if (liveEl) { liveEl.textContent = '○ STANDBY'; liveEl.className = 'wc-live'; }
     return;
@@ -976,7 +1018,7 @@ function renderWarConsole(w) {
 // ⚑ VICTORY SCREEN — pop once when a war we watched running comes to an end,
 // with the final tally, MVP, and a one-click rematch. Stays out of the way on
 // page load (only fires on a live running→ended transition, not a stale file).
-function showVictory(w) {
+function showVictory(w, clinch) {
   const s = w.score || { blue: 0, red: 0 };
   const armies = w.armies || {};
   const blueHeld = (armies.blue && armies.blue.held) || 0;
@@ -984,8 +1026,19 @@ function showVictory(w) {
   const nFronts = Object.keys(w.battlefield || {}).length || 5;
   const win = (w.winner || '—').toUpperCase();
   const banner = $('wv-banner');
-  banner.textContent = win === 'RED' ? '⚑ RED ARMY WINS' : '🛡️ BLUE HOLDS THE CLUSTER';
-  banner.className = 'wv-banner ' + (win === 'RED' ? 'red' : 'blue');
+  if (clinch) {
+    banner.textContent = clinch === 'RED'
+      ? '🏆 RED WINS THE SERIES' : '🏆 BLUE WINS THE SERIES';
+    banner.className = 'wv-banner clinch ' + (clinch === 'RED' ? 'red' : 'blue');
+  } else {
+    banner.textContent = win === 'RED' ? '⚑ RED ARMY WINS' : '🛡️ BLUE HOLDS THE CLUSTER';
+    banner.className = 'wv-banner ' + (win === 'RED' ? 'red' : 'blue');
+  }
+  const r = WAR.record;
+  $('wv-series').innerHTML =
+    `series (best of ${r.bestOf}) · 🔴 <b>${r.sRed}</b> — <b>${r.sBlue}</b> 🔵` +
+    ` · lifetime 🔴 ${r.red} · 🔵 ${r.blue}` +
+    (clinch ? ` · <b>${clinch} takes it — new series</b>` : '');
   $('wv-score').innerHTML =
     `<span class="wv-side red">🔴 RED <b>${s.red}</b></span>` +
     `<span class="wv-x">—</span>` +
@@ -1005,7 +1058,10 @@ function maybeShowVictory(w) {
   const running = !!(w && w.running);
   if (running) { WAR.wasRunning = true; WAR.dismissed = false; hideVictory(); return; }
   if (w && w.winner && WAR.wasRunning && !WAR.dismissed) {
-    showVictory(w);
+    const clinch = recordResult(w.winner);   // tally the result once per match
+    showVictory(w, clinch);
+    if (clinch) { WAR.record.sBlue = 0; WAR.record.sRed = 0; saveRecord(WAR.record); }
+    renderSeries();
     WAR.wasRunning = false;           // show exactly once per finished war
   }
 }
@@ -1036,6 +1092,18 @@ $('evo-toggle').addEventListener('click', () => evoToggle());
 $('evo-close').addEventListener('click', () => evoToggle(false));
 $('evo-run').addEventListener('click', evoRunRound);
 $('evo-war').addEventListener('click', evoWarToggle);
+// best-of series length — init from the saved record, reset the series on change
+(() => {
+  const sel = $('evo-bestof');
+  if (!sel) return;
+  sel.value = String(WAR.record.bestOf);
+  sel.addEventListener('change', (e) => {
+    WAR.record.bestOf = parseInt(e.target.value, 10) || 5;
+    WAR.record.sBlue = 0; WAR.record.sRed = 0;   // new length → fresh series
+    saveRecord(WAR.record); renderSeries();
+  });
+})();
+renderSeries();
 // battlefield cell → drill-down (delegated on the persistent reconciled grid)
 $('evo-war-bf').addEventListener('click', (e) => {
   const cell = e.target.closest('.bf-cell');
