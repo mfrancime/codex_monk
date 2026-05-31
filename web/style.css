@@ -766,3 +766,76 @@ body[data-defcon="1"] .klaxon {
 /* 🥷 stealth — Red under the radar */
 .war-phase.stealth, .war-phase.stealth_hit { color:var(--red-glow); font-style:italic; }
 .bf-cell.stealth { border-color:#6a1a1a; box-shadow:0 0 8px -3px var(--red); opacity:.82; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ⚔ CYBERWAR CONSOLE — the right-hand SIGINT feed (NATO command-center vibe).
+   The spheres ARE the battle; this is the wire: status, each army's strategy
+   genomes, and the autonomous event/hack stream. Declutter the old war-room:
+   the left control/log panels and the duplicate right grid/alerts step aside.
+   ══════════════════════════════════════════════════════════════════════════ */
+.float-left, .float-bl, .float-right, .float-br { display: none !important; }
+
+.warconsole {
+  position: fixed; right: 12px; top: 78px; bottom: 60px; width: 392px;
+  z-index: 5; display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 12px 8px; overflow: hidden;
+  border: 1px solid var(--green-soft); border-radius: 6px;
+  background: linear-gradient(180deg, rgba(8,18,10,.92), rgba(4,8,5,.92));
+  box-shadow: 0 0 24px -10px var(--green), inset 0 0 60px -40px var(--green);
+  font-size: 12px; animation: panel-in 0.5s ease both;
+}
+.wc-head { display: flex; align-items: center; justify-content: space-between;
+  border-bottom: 1px solid var(--green-soft); padding-bottom: 6px; }
+.wc-title { color: var(--green); letter-spacing: 2px; font-weight: 700;
+  text-shadow: 0 0 8px var(--green-soft); }
+.wc-live { font-size: 11px; letter-spacing: 1px; color: var(--text-dim); }
+.wc-live.on { color: var(--red); text-shadow: 0 0 8px var(--red);
+  animation: wcpulse 1.1s ease-in-out infinite; }
+.wc-live.off { color: var(--amber); }
+@keyframes wcpulse { 50% { opacity: .45; } }
+
+.wc-score { display: flex; align-items: center; justify-content: space-between;
+  padding: 4px 6px; border: 1px solid var(--green-soft); border-radius: 4px;
+  background: rgba(0,0,0,.35); }
+.wc-side { letter-spacing: 1px; } .wc-side b { font-size: 16px; }
+.wc-side.red b { color: var(--red); text-shadow: 0 0 8px var(--red); }
+.wc-side.blue b { color: #5fb8ff; text-shadow: 0 0 8px #2a6aa0; }
+.wc-vs { color: var(--text-dim); font-size: 10px; letter-spacing: 1px; }
+
+.wc-teams { display: flex; flex-direction: column; gap: 6px; }
+.wc-team { border-left: 2px solid; padding: 4px 6px; border-radius: 0 4px 4px 0;
+  background: rgba(0,0,0,.3); }
+.wc-team.red { border-color: var(--red); }
+.wc-team.blue { border-color: #5fb8ff; }
+.wc-team-head { font-size: 11px; letter-spacing: .5px; margin-bottom: 3px; }
+.wc-team-head b { color: var(--text); }
+.wc-strat { color: var(--amber); font-size: 10px; font-style: italic;
+  margin-bottom: 3px; opacity: .9; }
+.wc-unit { display: flex; align-items: center; gap: 6px; line-height: 1.5; }
+.wc-front { width: 64px; flex: none; font-size: 10px; letter-spacing: .5px;
+  color: var(--text-dim); }
+.wc-front.blue { color: #5fb8ff; } .wc-front.red { color: var(--red); }
+.wc-front.contested { color: var(--amber); }
+.wc-unit code { font-size: 10px; color: var(--text); opacity: .85;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gov-alert { color: var(--red); text-shadow: 0 0 6px var(--red); }
+
+.wc-feed-head { color: var(--text-dim); font-size: 10px; letter-spacing: 2px;
+  border-top: 1px solid var(--green-soft); padding-top: 6px; }
+.wc-cursor { color: var(--green); animation: wcpulse .9s steps(1) infinite; }
+.wc-feed { flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  gap: 1px; padding-right: 4px; font-size: 11px; line-height: 1.45; }
+.wc-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--text); opacity: .92; }
+.wc-line .wc-t { color: var(--text-dim); margin-right: 6px; }
+.wc-line.green  { color: var(--green); }
+.wc-line.red    { color: var(--red-glow); }
+.wc-line.cyan   { color: #5fd0ff; }
+.wc-line.stealth{ color: #c060ff; font-style: italic; }
+.wc-line.summary{ color: var(--amber); white-space: normal; margin-top: 4px;
+  border-top: 1px dashed var(--green-soft); padding-top: 4px; }
+.wc-idle { color: var(--text-dim); font-style: italic; opacity: .7;
+  font-size: 11px; padding: 8px 2px; }
+
+/* keep the console clear of narrow viewports / the time machine */
+@media (max-width: 900px) { .warconsole { width: 300px; } }

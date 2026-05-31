@@ -39,6 +39,11 @@
   let hovered = null;        // currently hover-highlighted mesh
   let replayMode = false;    // true while the TIME MACHINE is driving colors
 
+  // ⚔ battle-of-the-spheres state (fed from web/war.json via setWar)
+  let warState = null;
+  let _warTurn = -1, _warPhase = '';
+  const projectiles = [];
+
   // ── helpers ───────────────────────────────────────────────────────────
 
   let _glowTex = null;
@@ -76,6 +81,55 @@
     return spr;
   }
 
+  // Team identity from the fabric path, so the 3D spheres read as armies, not
+  // anonymous "FABRIC" blobs. Label is team-COLORED (persistent identity); the
+  // sphere itself stays severity-colored (live attack state).
+  function teamLabel(swarm) {
+    const p = swarm.path || '';
+    if (/k8s_deployed/.test(p)) return 'BLUE ARMY';
+    if (/codex\.red\.|\/red\./.test(p)) return 'RED ARMY';
+    if (/aggregat/.test(p)) return 'GOVERNOR';
+    if (/evolver/.test(p)) return 'EVOLVER';
+    if (/kernel/.test(p)) return 'KERNEL';
+    return swarm.swarm_name
+      || (p.split('/').pop() || 'fabric').replace(/^codex\./, '').replace(/\.fabric$/, '');
+  }
+  function teamColor(swarm) {
+    const p = swarm.path || '';
+    if (/k8s_deployed/.test(p)) return 0x5fb8ff;          // 🔵 blue
+    if (/codex\.red\.|\/red\./.test(p)) return 0xff3030;  // 🔴 red
+    if (/aggregat/.test(p)) return 0xffb300;              // 🛡️ amber
+    return 0x4dff7c;                                       // green
+  }
+  function isTeam(swarm) {
+    return /k8s_deployed|codex\.red\.|\/red\.|aggregat/.test(swarm.path || '');
+  }
+  // The ARMY spheres are colored by TEAM (blue/red/amber) so you can see who's
+  // who; the orbiting agent dots still flash by their own severity (live fire).
+  function hubColor(swarm) {
+    return isTeam(swarm) ? teamColor(swarm) : sevColor(swarm.severity);
+  }
+
+  // small unit tag (front name) that rides above an agent dot as a CHILD sprite,
+  // so it follows the dot's orbit for free. Turns anonymous "fairies" into the
+  // named soldiers of each army (pods/nodes/apiserver/scheduler defenders).
+  function makeUnitTag(text, color) {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 32;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 18px "JetBrains Mono", monospace';
+    ctx.fillStyle = '#' + color.toString(16).padStart(6, '0');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6;
+    ctx.fillText(text.toUpperCase(), 64, 17);
+    const tex = new THREE.CanvasTexture(c); tex.anisotropy = 2;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: tex, transparent: true, depthTest: false }));
+    spr.scale.set(6, 1.5, 1);
+    spr.position.set(0, 2.0, 0);
+    return spr;
+  }
+
   function makeStarfield() {
     const n = 600, pos = new Float32Array(n * 3);
     // deterministic scatter (no Math.random dependency for repeatability)
@@ -106,7 +160,7 @@
     const group = new THREE.Group();
     group.position.copy(pos);
 
-    const col = sevColor(swarm.severity);
+    const col = hubColor(swarm);
     const sphere = new THREE.Mesh(
       new THREE.SphereGeometry(4.2, 32, 32),
       new THREE.MeshStandardMaterial({
@@ -124,7 +178,7 @@
       }));
     group.add(shell);
 
-    const label = makeLabel(swarm.swarm_name || 'fabric', col);
+    const label = makeLabel(teamLabel(swarm), teamColor(swarm));
     label.position.set(0, 11, 0);
     group.add(label);
 
@@ -176,7 +230,7 @@
 
   function updateHub(rec, swarm) {
     if (replayMode) { rec.data = swarm; return; }  // TIME MACHINE owns the colors
-    const col = sevColor(swarm.severity);
+    const col = hubColor(swarm);                    // team identity persists
     rec.sphere.material.color.setHex(col);
     rec.sphere.material.emissive.setHex(col);
     rec.shell.material.color.setHex(col);
@@ -241,6 +295,89 @@
   let _last = 0;
   const FRAME_MS = 1000 / 30;               // cap at ~30 fps to spare the CPU/GPU
 
+  // ⚔ BATTLE OF THE SPHERES — drive the 3D fight from the live war state.
+  const unitFront = {};          // "path#id" -> front (pods/nodes/…)
+  let _unitTags = 0;
+
+  function tagUnits(path, color) {
+    const rec = path && hubs[path];
+    if (!rec) return;
+    Object.keys(rec.agents).forEach((id) => {
+      const front = unitFront[path + '#' + id];
+      const m = rec.agents[id];
+      if (front && !m.userData._tag) {
+        const tag = makeUnitTag(front, color);
+        m.add(tag);
+        m.userData._tag = tag;
+        _unitTags++;
+        window.__war3dUnitTags = _unitTags;
+      }
+    });
+  }
+
+  function setWar(w) {
+    warState = w;
+    // map each army's agent ids → the front it fights on, so the orbiting dots
+    // read as named units. Blue units carry their aid; Red's are PLAYBOOK-ordered.
+    if (w && w.armies) {
+      const bf = w.blue_fabric, rf = w.red_fabric;
+      ((w.armies.blue && w.armies.blue.units) || []).forEach((u) => {
+        if (bf && u.aid != null) unitFront[bf + '#' + u.aid] = u.front;
+      });
+      ((w.armies.red && w.armies.red.units) || []).forEach((u, i) => {
+        if (rf) unitFront[rf + '#' + (i + 1)] = u.front;
+      });
+      if (bf) tagUnits(bf, teamColor({ path: bf }));
+      if (rf) tagUnits(rf, teamColor({ path: rf }));
+    }
+  }
+
+  function spawnProjectile(from, to, phase) {
+    if (projectiles.length > 20) return;
+    const hex = phase === 'stealth' ? 0xb030ff
+      : phase === 'preempting' ? 0x5fb8ff : 0xff3030;
+    const spr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowTexture(), color: hex, transparent: true, opacity: 0.95,
+      depthTest: false,
+    }));
+    spr.scale.set(3.4, 3.4, 1);
+    spr.position.copy(from);
+    spr.userData = { from: from.clone(), to: to.clone(), t: 0 };
+    scene.add(spr);
+    projectiles.push(spr);
+  }
+
+  function updateProjectiles(dt) {
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const s = projectiles[i];
+      s.userData.t += dt * 1.5;
+      const tt = s.userData.t;
+      if (tt >= 1) { scene.remove(s); projectiles.splice(i, 1); continue; }
+      s.position.lerpVectors(s.userData.from, s.userData.to, tt);
+      s.position.y += Math.sin(tt * Math.PI) * 7;
+      s.material.opacity = 0.95 * (1 - tt * 0.4);
+    }
+  }
+
+  function flashHub(rec, hex) { if (rec) { rec.flashT = 0.7; rec.flashHex = hex; } }
+
+  function stepBattle(dt) {
+    if (!warState || !warState.running) return;
+    const blue = hubs[warState.blue_fabric];
+    const red = hubs[warState.red_fabric];
+    const cur = warState.current || {};
+    const ph = cur.phase || '';
+    if (cur.phase !== _warPhase || warState.turn !== _warTurn) {
+      if (blue && red && ['attacking', 'stealth', 'preempting'].includes(ph)) {
+        spawnProjectile(red.pos, blue.pos, ph);
+      }
+      if (['breached', 'stealth_hit'].includes(ph)) flashHub(blue, 0xff3030);
+      else if (['blocked', 'preempted'].includes(ph)) flashHub(blue, 0x4dff7c);
+      _warPhase = cur.phase; _warTurn = warState.turn;
+    }
+    updateProjectiles(dt);
+  }
+
   function animate() {
     // freeze hook: lets a test (or a paused tab) stop the rAF loop after
     // rendering one final frame, so a screenshot can capture a stable image.
@@ -256,9 +393,22 @@
     const t = now / 1000;
     const heat = (5 - defcon) / 4;            // 0 calm … 1 DEFCON-1
 
+    // ⚔ drive the battle (projectiles, sphere flashes) from the war state
+    stepBattle(dt);
+
     // hub breathing + shell spin + agent orbits
     Object.values(hubs).forEach((rec) => {
-      const pulse = 1.3 + Math.sin(t * 2 + rec.pos.x) * 0.25 + heat * 0.6;
+      let pulse = 1.3 + Math.sin(t * 2 + rec.pos.x) * 0.25 + heat * 0.6;
+      // ⚔ battle flash: a hit/block momentarily slams the sphere bright + tints it
+      if (rec.flashT > 0) {
+        rec.flashT = Math.max(0, rec.flashT - dt);
+        const k = rec.flashT / 0.7;                 // 1 → 0 over the flash
+        pulse += k * 4;
+        rec.sphere.material.emissive.setHex(rec.flashHex);
+        if (rec.flashT === 0 && rec.data) {         // restore the team/sev color
+          rec.sphere.material.emissive.setHex(hubColor(rec.data));
+        }
+      }
       rec.sphere.material.emissiveIntensity = pulse;
       rec.shell.rotation.y += dt * 0.25;
       rec.shell.rotation.x += dt * 0.12;
@@ -423,5 +573,5 @@
   }
   function clearReplay() { replayMode = false; }   // next live update recolors
 
-  window.War3D = { init, update, setDefcon, setReplay, clearReplay };
+  window.War3D = { init, update, setDefcon, setReplay, clearReplay, setWar };
 })();

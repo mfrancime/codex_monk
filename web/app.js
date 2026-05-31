@@ -421,6 +421,9 @@ setInterval(refresh, POLL_MS);
 setInterval(refreshLog, LOG_POLL_MS);
 setInterval(refreshAlerts, ALERT_POLL_MS);
 refreshAlerts();
+// ⚔ war console + battle-of-the-spheres run always (not just when the tab is open)
+evoWarPoll();
+setInterval(evoWarPoll, 1500);
 
 // ── TIME MACHINE — scrub the swarm's recorded severity history ────────────
 //
@@ -724,10 +727,8 @@ function evoToggle(force) {
     evoRefresh();
     evoWarPoll();
     if (!EVO.timer) EVO.timer = setInterval(evoRefresh, 4000);
-    if (!WAR.timer) WAR.timer = setInterval(evoWarPoll, 1500);
   } else {
     if (EVO.timer) { clearInterval(EVO.timer); EVO.timer = null; }
-    if (WAR.timer) { clearInterval(WAR.timer); WAR.timer = null; }
   }
 }
 
@@ -890,14 +891,83 @@ async function evoWarPoll() {
     if (w.current) w.current.phase = 'calm';
   }
   WAR.last = w;
-  const el = $('evo-war-banner');
-  if (el) el.innerHTML = w ? evoWarBanner(w) : '';
-  evoWarCells(w);
+  // ⚔ always-on: drive the battle-of-the-spheres + the right SIGINT console
+  if (window.War3D && window.War3D.setWar) window.War3D.setWar(w);
+  renderWarConsole(w);
+  // tab-only rendering (the WARGAME overlay)
+  if (EVO.open) {
+    const el = $('evo-war-banner');
+    if (el) el.innerHTML = w ? evoWarBanner(w) : '';
+    evoWarCells(w);
+  }
   const btn = $('evo-war');
   if (btn && w) {
     btn.textContent = w.running ? '■ STOP WAR' : '⚔ START WAR';
     btn.classList.toggle('live', !!w.running);
   }
+}
+
+// ── ⚔ CYBERWAR CONSOLE (right column) — live SIGINT: status, strategies of
+// each army, and the autonomous event/hack feed. Always on, fed by war.json.
+function wcFeedClass(r) {
+  if (/INFILTRAT|STEALTH|🥷/.test(r)) return 'stealth';
+  if (/BREACH/.test(r)) return 'red';
+  if (/PRE-EMPT|🔮/.test(r)) return 'cyan';
+  if (/HELD|CAUGHT|BLOCK|REPELLED/.test(r)) return 'green';
+  return '';
+}
+
+function renderWarConsole(w) {
+  const liveEl = $('wc-live'), scoreEl = $('wc-score');
+  const teamsEl = $('wc-teams'), feedEl = $('wc-feed');
+  if (!feedEl) return;
+  if (!w) {
+    if (liveEl) { liveEl.textContent = '○ STANDBY'; liveEl.className = 'wc-live'; }
+    return;
+  }
+  const s = w.score || { blue: 0, red: 0 };
+  const armies = w.armies || {}, gov = w.governor || {};
+  const running = !!w.running;
+  if (liveEl) {
+    liveEl.textContent = running ? '● LIVE'
+      : (w.winner ? '⚑ WINNER ' + w.winner : '⚑ CEASEFIRE');
+    liveEl.className = 'wc-live ' + (running ? 'on' : 'off');
+  }
+  if (scoreEl) {
+    scoreEl.innerHTML =
+      `<span class="wc-side red">🔴 RED <b>${s.red}</b></span>` +
+      `<span class="wc-vs">${running ? 'turn ' + (w.turn || 0) + ' · wave ' + (w.wave || 1) : 'ceasefire'}</span>` +
+      `<span class="wc-side blue">🔵 BLUE <b>${s.blue}</b></span>`;
+  }
+  if (teamsEl) {
+    const blue = armies.blue || {}, red = armies.red || {};
+    const govTxt = gov.present
+      ? `<span class="${gov.sev && gov.sev !== 'OK' ? 'gov-alert' : ''}">${gov.sev}${gov.code && gov.code !== 'OK' ? ':' + gov.code : ''}</span>`
+      : 'offline';
+    const unit = (u, holder) =>
+      `<div class="wc-unit"><span class="wc-front ${holder ? u.holder : 'red'}">${u.front}</span><code>${evoGenomeHTML(u.genome)}</code></div>`;
+    teamsEl.innerHTML =
+      `<div class="wc-team red">
+        <div class="wc-team-head">🔴 RED ARMY · took <b>${red.taken || 0}</b>/5 · 🥷 <b>${red.infiltrations || 0}</b></div>
+        <div class="wc-strat">${w.strategy || red.strategy || 'probing'}</div>
+        ${(red.units || []).map((u) => unit(u, false)).join('')}
+      </div>
+      <div class="wc-team blue">
+        <div class="wc-team-head">🔵 BLUE ARMY · holds <b>${blue.held || 0}</b>/5 · 🛡️ ${govTxt}</div>
+        ${(blue.units || []).map((u) => unit(u, true)).join('')}
+      </div>`;
+  }
+  const log = w.log || [];
+  if (!log.length) {
+    feedEl.innerHTML = `<div class="wc-idle">${running ? 'mustering forces…' : 'no events yet'}</div>`;
+    return;
+  }
+  const atBottom = feedEl.scrollHeight - feedEl.scrollTop - feedEl.clientHeight < 60;
+  let html = log.map((l) =>
+    `<div class="wc-line ${wcFeedClass(l.result)}"><span class="wc-t">t${String(l.turn).padStart(2, '0')}</span> ${l.result}</div>`).join('');
+  if (w.summary && !running) html += `<div class="wc-line summary">⚑ ${w.summary}</div>`;
+  feedEl.innerHTML = html;
+  if (atBottom) feedEl.scrollTop = feedEl.scrollHeight;
 }
 
 async function evoWarToggle() {
